@@ -183,7 +183,11 @@ actor DownloadJob {
     private func attempt() async throws {
         try await transition(to: .probing)
 
-        let sensitive = await env.secrets.secrets(for: id) ?? SensitiveOptions()
+        let stored = await env.secrets.secrets(for: id)
+        // An unreadable secret must not look like "no secrets": the server could then answer with a login
+        // page, which would be saved as the file.
+        if stored == nil, record.hasSecrets == true { throw DownloadError.credentialsUnavailable }
+        let sensitive = stored ?? SensitiveOptions()
         try RequestContext.validate(url: record.url, options: record.options, sensitive: sensitive)
         let context = RequestContext(
             url: record.url,

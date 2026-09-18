@@ -318,4 +318,57 @@ struct ReviewRegressionTests {
         let urls = LinkParser.urls(in: filler + "(https://example.com/a.zip), <https://example.com/b.zip> \"https://example.com/c.zip\".")
         #expect(urls.map(\.absoluteString) == ["https://example.com/a.zip", "https://example.com/b.zip", "https://example.com/c.zip"])
     }
+
+    // MARK: Secrets
+
+    @Test func aDownloadThatNeededSecretsFailsWhenTheyCannotBeRead() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let server = try await MockHTTPServer.start { MockResource(size: 50_000).response(for: $0) }; defer { server.stop() }
+
+        let first = env.makeManager()
+        let id = try await first.add(env.newDownload(server.url(), segments: 1) {
+            $0.sensitive.cookies = "session=abc"
+            $0.startPaused = true
+        })
+        await first.shutdown()
+
+        // The next launch cannot read the secret (keychain locked, entry removed, or an in-memory store).
+        let second = DownloadManager(configuration: TestEnvironment.fastConfiguration(), store: FileJobStore(directory: env.jobs), secrets: InMemorySecretStore())
+        try await second.load()
+        await second.resume(id)
+        let done = await waitForCompletion(second, id)
+
+        #expect(done.state == .failed)
+        #expect(done.failure?.contains("cookies or credentials") == true, "\(done.failure ?? "")")
+        #expect(server.requests.isEmpty, "it must not have tried unauthenticated")
+        #expect(!DownloadError.credentialsUnavailable.isRetryable)
+    }
+
+    @Test func downloadsWithoutSecretsAreUnaffectedByAnEmptySecretStore() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let resource = MockResource(size: 30_000)
+        let server = try await MockHTTPServer.start { resource.response(for: $0) }; defer { server.stop() }
+
+        let first = env.makeManager()
+        let id = try await first.add(env.newDownload(server.url(), segments: 1) { $0.startPaused = true })
+        await first.shutdown()
+        let second = DownloadManager(configuration: TestEnvironment.fastConfiguration(), store: FileJobStore(directory: env.jobs), secrets: InMemorySecretStore())
+        try await second.load()
+        await second.resume(id)
+        #expect(await waitForCompletion(second, id).state == .completed)
+    }
+
+    @Test func theSecretFlagIsStoredButNotTheSecrets() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let manager = env.makeManager()
+        _ = try await manager.add(env.newDownload(URL(string: "https://example.com/x")!, segments: 1) {
+            $0.sensitive.cookies = "session=VERYSECRET"
+            $0.startPaused = true
+        })
+        let record = try #require(try await FileJobStore(directory: env.jobs).loadAll().first)
+        #expect(record.hasSecrets == true)
+        let json = try String(contentsOf: env.jobs.appending(path: "\(record.id.uuidString).json"), encoding: .utf8)
+        #expect(!json.contains("VERYSECRET"))
+    }
 }
+

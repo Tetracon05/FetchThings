@@ -1,0 +1,363 @@
+import AppKit
+import DownloadKit
+import Foundation
+import Observation
+import OSLog
+import UniformTypeIdentifiers
+
+private let log = Logger(subsystem: "com.example.Downloader", category: "model")
+
+/// Everything the window shows, and every action it can take. The engine's events are batched, so the
+/// views are refreshed a few times a second instead of on every progress tick.
+@MainActor
+@Observable
+final class AppModel {
+    let settings: AppSettings
+    @ObservationIgnored private let engine: any DownloadEngine
+    @ObservationIgnored private let pasteboard: any PasteboardSource
+
+    private(set) var downloads: [DownloadID: DownloadSnapshot] = [:]
+    /// `downloads` after the sidebar filter, search and sort. Recomputed when any of them changes.
+    private(set) var visibleDownloads: [DownloadSnapshot] = []
+
+    var sidebarSelection: SidebarItem = .all { didSet { recomputeVisible() } }
+    var searchText = "" { didSet { recomputeVisible() } }
+    var sortOrder: [KeyPathComparator<DownloadSnapshot>] = [KeyPathComparator(\.createdAt, order: .reverse)] {
+        didSet { recomputeVisible() }
+    }
+    /// Always a subset of `visibleDownloads`: a row that is filtered out is deselected, so no action can
+    /// reach a download the user cannot see.
+    var selection: Set<DownloadID> = []
+    var showInspector = true
+
+    var showAddSheet = false
+    var draft: AddDraft
+    var alert: AlertMessage?
+    var pendingRemoval: PendingRemoval?
+    /// Links noticed on the clipboard, offered (not added) to the user.
+    private(set) var clipboardOffer: [URL]?
+
+    /// Called when a download reaches `.completed` during this session; Phase 3 hooks notifications and the Dock here.
+    @ObservationIgnored var onCompleted: ((DownloadSnapshot) -> Void)?
+    /// The clipboard is only looked at while the app is frontmost. Replaceable for tests.
+    @ObservationIgnored var isAppActive: () -> Bool = { NSApp?.isActive == true }
+    /// Moves a finished file to the Trash. Replaceable for tests.
+    @ObservationIgnored var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+
+    @ObservationIgnored private let inbox = EventInbox()
+    @ObservationIgnored private var tasks: [Task<Void, Never>] = []
+    @ObservationIgnored private var lastSeenClipboardChange: Int
+    /// Downloads that completed before this moment were restored from disk, not finished just now.
+    @ObservationIgnored private let startedAt = Date()
+
+    init(engine: any DownloadEngine, settings: AppSettings, pasteboard: any PasteboardSource = SystemPasteboard()) {
+        self.engine = engine
+        self.settings = settings
+        self.pasteboard = pasteboard
+        draft = AddDraft(folder: settings.downloadFolder, segmentCount: settings.segmentCount, userAgent: settings.defaultUserAgent)
+        lastSeenClipboardChange = pasteboard.changeCount
+    }
+
+    // MARK: Lifecycle
+
+    /// Applies settings, loads persisted downloads, and starts following the engine.
+    func start() {
+        guard tasks.isEmpty else { return }
+        let engine = engine
+        let inbox = inbox
+        // Not on the main actor: draining the engine's stream must not depend on the UI keeping up.
+        tasks.append(Task.detached { [weak self] in
+            // Limits first: restored downloads start the moment they are loaded and must already be throttled.
+            await self?.applyEngineSettings()
+            do { try await engine.load() } catch { await self?.reportRestoreFailure(error) }
+            for await event in await engine.events() { inbox.put(event) }
+        })
+        tasks.append(Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                self?.flushEvents()
+            }
+        })
+        tasks.append(Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await self?.checkClipboard()
+            }
+        })
+    }
+
+    var isStarted: Bool { !tasks.isEmpty }
+
+    private func reportRestoreFailure(_ error: any Error) {
+        alert = AlertMessage(title: "Couldn’t Restore Downloads", message: error.localizedDescription)
+    }
+
+    /// Stops following the engine and stops running transfers, keeping their progress.
+    func shutdown() async {
+        tasks.forEach { $0.cancel() }
+        tasks.removeAll()
+        await engine.shutdown()
+    }
+
+    func applyEngineSettings() async {
+        await engine.setMaxConcurrentDownloads(settings.maxConcurrentDownloads)
+        await engine.setGlobalSpeedLimit(settings.globalSpeedLimit)
+    }
+
+    // MARK: Events
+
+    /// Applies everything received since the last call. Only the newest event per download matters.
+    func flushEvents() {
+        let events = inbox.take()
+        guard !events.isEmpty else { return }
+        for event in events {
+            switch event {
+            case .snapshot(let snapshot):
+                let previous = downloads[snapshot.id]?.state
+                downloads[snapshot.id] = snapshot
+                if isNewCompletion(snapshot, previous: previous) { onCompleted?(snapshot) }
+            case .removed(let id):
+                downloads[id] = nil
+            }
+        }
+        refreshCounts()
+        recomputeVisible()
+    }
+
+    private func isNewCompletion(_ snapshot: DownloadSnapshot, previous: DownloadState?) -> Bool {
+        guard snapshot.state == .completed else { return false }
+        if let previous { return previous != .completed }
+        // First sight of this download. A small file can go from queued to done within one refresh, so this
+        // still counts if it finished during this session; downloads restored at launch finished before it.
+        return (snapshot.completedAt ?? .distantPast) >= startedAt
+    }
+
+    private func recomputeVisible() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = downloads.values.filter { download in
+            sidebarSelection.includes(download)
+                && (query.isEmpty
+                    || download.displayName.localizedCaseInsensitiveContains(query)
+                    || download.url.absoluteString.localizedCaseInsensitiveContains(query))
+        }
+        // The tiebreakers keep equal rows in a stable order between refreshes.
+        let tiebreakers = [KeyPathComparator(\DownloadSnapshot.createdAt, order: .reverse), KeyPathComparator(\DownloadSnapshot.id.uuidString)]
+        visibleDownloads = filtered.sorted(using: sortOrder + tiebreakers)
+
+        let visibleIDs = Set(visibleDownloads.map(\.id))
+        if !selection.isSubset(of: visibleIDs) { selection.formIntersection(visibleIDs) }
+    }
+
+    // MARK: Derived state
+
+    /// How many downloads each sidebar row shows. Computed once per refresh; the sidebar only redraws when a
+    /// count actually changes, not on every progress tick.
+    private(set) var counts: [SidebarItem: Int] = [:]
+
+    func count(for item: SidebarItem) -> Int { counts[item] ?? 0 }
+
+    private func refreshCounts() {
+        var fresh: [SidebarItem: Int] = [:]
+        for item in SidebarItem.downloadItems + SidebarItem.categoryItems {
+            fresh[item] = downloads.values.reduce(0) { $0 + (item.includes($1) ? 1 : 0) }
+        }
+        if fresh != counts { counts = fresh }
+    }
+
+    var selectedDownloads: [DownloadSnapshot] { ordered(selection) }
+
+    /// The single selected download, for the inspector.
+    var inspectedDownload: DownloadSnapshot? {
+        let selected = selectedDownloads
+        return selected.count == 1 ? selected.first : nil
+    }
+
+    var canPauseSelection: Bool { selectedDownloads.contains { $0.isPausable } }
+    var canResumeSelection: Bool { selectedDownloads.contains { $0.isResumable } }
+    var canRevealSelection: Bool { !selectedDownloads.isEmpty }
+
+    var totalBytesPerSecond: Double { downloads.values.reduce(0) { $0 + $1.bytesPerSecond } }
+    var runningCount: Int { downloads.values.filter { $0.state.isRunning }.count }
+
+    // MARK: Actions on downloads
+
+    func pauseSelection() { pause(selection) }
+    func resumeSelection() { resume(selection) }
+
+    func pause(_ ids: Set<DownloadID>) {
+        let targets = ordered(ids).filter(\.isPausable).map(\.id)
+        Task { for id in targets { await engine.pause(id) } }
+    }
+
+    /// Resumes paused downloads and retries failed ones.
+    func resume(_ ids: Set<DownloadID>) {
+        let targets = ordered(ids).filter(\.isResumable).map(\.id)
+        Task { for id in targets { await engine.resume(id) } }
+    }
+
+    func pauseAll() { Task { await engine.pauseAll() } }
+    func resumeAll() { Task { await engine.resumeAll() } }
+
+    /// Removes downloads from the list, asking first when that would delete partly downloaded data. With
+    /// `trashFiles`, finished files also go to the Trash; otherwise they are kept.
+    func requestRemoval(_ ids: Set<DownloadID>, trashFiles: Bool = false) {
+        let targets = ordered(ids)
+        guard !targets.isEmpty else { return }
+        let partial = targets.filter { $0.state != .completed && $0.receivedBytes > 0 }
+        if partial.isEmpty {
+            performRemoval(of: targets, trashFiles: trashFiles)
+        } else {
+            pendingRemoval = PendingRemoval(ids: Set(targets.map(\.id)), trashFiles: trashFiles, partialCount: partial.count, totalCount: targets.count)
+        }
+    }
+
+    func confirmRemoval() {
+        guard let pending = pendingRemoval else { return }
+        pendingRemoval = nil
+        performRemoval(of: ordered(pending.ids), trashFiles: pending.trashFiles)
+    }
+
+    func cancelRemoval() { pendingRemoval = nil }
+
+    private func performRemoval(of targets: [DownloadSnapshot], trashFiles: Bool) {
+        Task {
+            for target in targets {
+                if trashFiles, target.state == .completed, let file = target.finalURL {
+                    do {
+                        try trash(file)
+                    } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
+                        // Already gone: nothing to trash, the entry can still go.
+                    } catch {
+                        alert = AlertMessage(title: "Couldn’t Move “\(target.displayName)” to the Trash", message: error.localizedDescription)
+                        continue
+                    }
+                }
+                await engine.remove(target.id, deleteFiles: false)
+            }
+        }
+    }
+
+    /// The visible downloads among `ids`, in on-screen order.
+    private func ordered(_ ids: Set<DownloadID>) -> [DownloadSnapshot] {
+        visibleDownloads.filter { ids.contains($0.id) }
+    }
+
+    func revealInFinder(_ ids: Set<DownloadID>) {
+        let urls = ordered(ids).map { download -> URL in
+            if let final = download.finalURL { return final }
+            if let name = download.filename {
+                let part = download.destinationDirectory.appending(path: name + ".part", directoryHint: .notDirectory)
+                if FileManager.default.fileExists(atPath: part.path) { return part }
+            }
+            return download.destinationDirectory
+        }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    func open(_ download: DownloadSnapshot) {
+        guard download.state == .completed, let url = download.finalURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func copyLinks(_ ids: Set<DownloadID>) {
+        let text = ordered(ids).map(\.url.absoluteString).joined(separator: "\n")
+        guard !text.isEmpty else { return }
+        lastSeenClipboardChange = pasteboard.copy(text) // our own copy is not an offer
+    }
+
+    // MARK: Adding
+
+    /// Adds every request; a link the engine refuses does not stop the rest.
+    func add(_ requests: [NewDownload]) async -> AddOutcome {
+        var outcome = AddOutcome()
+        log.info("Adding \(requests.count, privacy: .public) download(s)")
+        for request in requests {
+            do {
+                try await engine.add(request)
+                outcome.added += 1
+            } catch {
+                outcome.failedLinks.append(request.url)
+                outcome.failures.append("\(request.url.absoluteString): \(error.localizedDescription)")
+            }
+        }
+        return outcome
+    }
+
+    /// Opens the Add sheet with `links` filled in. If the sheet is already open, they are appended.
+    func presentAddSheet(links: [URL] = []) {
+        let text = links.map(\.absoluteString).joined(separator: "\n")
+        log.info("Showing the Add sheet with \(links.count, privacy: .public) link(s); nothing is added until confirmed")
+        if showAddSheet {
+            if !text.isEmpty { draft.linksText += (draft.linksText.isEmpty || draft.linksText.hasSuffix("\n") ? "" : "\n") + text }
+        } else {
+            resetDraft()
+            draft.linksText = text
+            showAddSheet = true
+        }
+    }
+
+    /// Forgets everything typed into the Add sheet, passwords and cookies included. Called when the sheet closes,
+    /// so secrets do not linger in memory.
+    func resetDraft() {
+        draft = AddDraft(folder: settings.downloadFolder, segmentCount: settings.segmentCount, userAgent: settings.defaultUserAgent)
+    }
+
+    /// Anything the system hands the app: `downloader://` links, dropped or opened text files, and
+    /// plain web links. All of it only *proposes* downloads in the Add sheet.
+    func handleIncoming(urls: [URL]) {
+        Task {
+            let resolution = await IncomingLinks.resolve(urls)
+            log.info("Received \(urls.count, privacy: .public) item(s) from the system, \(resolution.links.count, privacy: .public) link(s) found")
+            if !resolution.links.isEmpty { presentAddSheet(links: resolution.links) }
+            if let problem = resolution.problems.first {
+                alert = AlertMessage(title: resolution.links.isEmpty ? "No Links Found" : "Some Items Were Skipped", message: problem)
+            } else if resolution.links.isEmpty {
+                alert = AlertMessage(title: "No Links Found", message: "There were no http or https links in what you opened or dropped.")
+            }
+        }
+    }
+
+    /// Pasted or dropped text.
+    func handleText(_ text: String) {
+        let links = LinkParser.urls(in: text)
+        if links.isEmpty {
+            alert = AlertMessage(title: "No Links Found", message: "The text doesn’t contain an http or https link.")
+        } else {
+            presentAddSheet(links: links)
+        }
+    }
+
+    func addFromClipboard() {
+        Task {
+            let links = await pasteboard.links()
+            if links.isEmpty {
+                alert = AlertMessage(title: "No Links on the Clipboard", message: "Copy an http or https link first.")
+            } else {
+                presentAddSheet(links: links)
+            }
+        }
+    }
+
+    // MARK: Clipboard
+
+    func checkClipboard() async {
+        guard settings.detectClipboard, isAppActive(), !showAddSheet else { return }
+        let change = pasteboard.changeCount
+        guard change != lastSeenClipboardChange else { return }
+        lastSeenClipboardChange = change
+        let known = Set(downloads.values.map(\.url.absoluteString))
+        let links = await pasteboard.links().filter { !known.contains($0.absoluteString) }
+        clipboardOffer = links.isEmpty ? nil : links
+    }
+
+    func acceptClipboardOffer() {
+        guard let links = clipboardOffer else { return }
+        clipboardOffer = nil
+        presentAddSheet(links: links)
+    }
+
+    func dismissClipboardOffer() {
+        clipboardOffer = nil
+    }
+}

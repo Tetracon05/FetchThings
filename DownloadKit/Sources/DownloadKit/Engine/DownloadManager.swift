@@ -63,6 +63,9 @@ public actor DownloadManager {
         updateActivity()
         for continuation in subscribers.values { continuation.finish() }
         subscribers.removeAll()
+        // Subscribers hear about a change before the store has written it, so wait for those writes:
+        // otherwise a download that finished a moment ago is on disk as "running" and starts over.
+        await store.flush()
     }
 
     // MARK: Adding and removing
@@ -76,7 +79,7 @@ public actor DownloadManager {
         try RequestContext.validate(url: url, options: request.options, sensitive: sensitive)
         let directory = try DestinationResolver.prepareDirectory(request.destinationDirectory)
 
-        let record = DownloadRecord(
+        var record = DownloadRecord(
             url: url,
             destinationDirectory: directory,
             requestedFilename: request.filename,
@@ -85,7 +88,10 @@ public actor DownloadManager {
             sequence: nextSequence
         )
         nextSequence += 1
-        if !sensitive.isEmpty { try await secrets.setSecrets(sensitive, for: record.id) }
+        if !sensitive.isEmpty {
+            try await secrets.setSecrets(sensitive, for: record.id)
+            record.hasSecrets = true
+        }
         try await store.save(record)
 
         let job = DownloadJob(record: record, env: makeEnvironment())

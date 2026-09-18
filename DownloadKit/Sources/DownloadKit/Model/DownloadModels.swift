@@ -119,6 +119,10 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Equatable {
     public var completedAt: Date?
     public var sequence: Int
     public var checksumVerified: Bool?
+    /// Whether this download was added with cookies, headers or credentials, which live in the `SecretStore`.
+    /// Recorded so that secrets which cannot be read later fail the download instead of silently
+    /// downloading without them. (Optional so job files written before this field existed still load.)
+    public var hasSecrets: Bool?
 
     public init(
         id: DownloadID = UUID(),
@@ -148,6 +152,7 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Equatable {
         self.completedAt = nil
         self.sequence = sequence
         self.checksumVerified = nil
+        self.hasSecrets = nil
     }
 
     /// Bytes that survive a stop. A `.single` download restarts from zero, so until it completes it has
@@ -171,7 +176,7 @@ public struct SegmentSnapshot: Sendable, Equatable {
     public var received: Int64
     public var isActive: Bool
 
-    init(index: Int, start: Int64, end: Int64, received: Int64, isActive: Bool) {
+    public init(index: Int, start: Int64, end: Int64, received: Int64, isActive: Bool) {
         self.index = index
         self.start = start
         self.end = end
@@ -204,6 +209,46 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
     public var speedLimit: Int64?
     public var checksumVerified: Bool?
     public var finalURL: URL?
+
+    public init(
+        id: DownloadID = UUID(),
+        url: URL,
+        filename: String? = nil,
+        destinationDirectory: URL,
+        state: DownloadState = .queued,
+        mode: TransferMode? = nil,
+        totalBytes: Int64? = nil,
+        receivedBytes: Int64 = 0,
+        bytesPerSecond: Double = 0,
+        eta: TimeInterval? = nil,
+        activeConnections: Int = 0,
+        segments: [SegmentSnapshot] = [],
+        failure: String? = nil,
+        createdAt: Date = Date(),
+        completedAt: Date? = nil,
+        speedLimit: Int64? = nil,
+        checksumVerified: Bool? = nil,
+        finalURL: URL? = nil
+    ) {
+        self.id = id
+        self.url = url
+        self.filename = filename
+        self.destinationDirectory = destinationDirectory
+        self.state = state
+        self.mode = mode
+        self.totalBytes = totalBytes
+        self.receivedBytes = receivedBytes
+        self.bytesPerSecond = bytesPerSecond
+        self.eta = eta
+        self.activeConnections = activeConnections
+        self.segments = segments
+        self.failure = failure
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.speedLimit = speedLimit
+        self.checksumVerified = checksumVerified
+        self.finalURL = finalURL
+    }
 
     /// 0...1, or `nil` when the total size is unknown.
     public var fraction: Double? {

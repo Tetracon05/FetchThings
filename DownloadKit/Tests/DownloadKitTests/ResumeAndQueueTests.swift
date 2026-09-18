@@ -110,6 +110,27 @@ struct ResumeTests {
         #expect(await first.snapshot(id)?.state == .queued)
     }
 
+    @Test func aCompletionIsOnDiskBeforeShutdownReturns() async throws {
+        // Subscribers see a state change before the store has written it. Quitting right then must not leave
+        // a finished download recorded as running, or the next launch would download it all again.
+        let resource = MockResource(size: 20_000)
+        let server = try await MockHTTPServer.start { resource.response(for: $0) }; defer { server.stop() }
+
+        for round in 1...25 {
+            let env = try TestEnvironment(); defer { env.cleanup() }
+            let manager = env.makeManager()
+            let stream = await manager.events()
+            let id = try await manager.add(env.newDownload(server.url("/r\(round).bin"), segments: 1))
+            _ = await collectEvents(stream) { event in
+                if case .snapshot(let s) = event, s.id == id { return s.state == .completed }
+                return false
+            }
+            await manager.shutdown()
+            let stored = try #require(try await FileJobStore(directory: env.jobs).loadAll().first)
+            #expect(stored.state == .completed, "round \(round): the completion had not been written when shutdown returned")
+        }
+    }
+
     @Test func partialDataIsDiscardedWhenTheServerFileChangedWhilePaused() async throws {
         let env = try TestEnvironment(); defer { env.cleanup() }
         let live = LiveResource(MockResource(size: 1_500_000, seed: 1, etag: "\"v1\"", bytesPerSecond: 750_000))

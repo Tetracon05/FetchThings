@@ -1,8 +1,9 @@
 import Foundation
 
 /// Holds cookies, custom headers and Basic-auth credentials, kept apart from the job store. The app
-/// supplies a Keychain-backed implementation; the in-memory one loses secrets on quit, which makes
-/// an interrupted download that needed them fail with a clear error instead of leaking them to disk.
+/// supplies a Keychain-backed implementation; the in-memory one loses secrets on quit. A download added
+/// with secrets (`DownloadRecord.hasSecrets`) fails with `credentialsUnavailable` when they cannot be read
+/// back, rather than carrying on without them.
 public protocol SecretStore: Sendable {
     func secrets(for id: DownloadID) async -> SensitiveOptions?
     func setSecrets(_ secrets: SensitiveOptions, for id: DownloadID) async throws

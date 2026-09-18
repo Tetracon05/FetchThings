@@ -1,5 +1,15 @@
 import Foundation
 
+public enum LinkParserError: LocalizedError, Equatable {
+    case fileTooLarge(limitMB: Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .fileTooLarge(let limit): "The file is larger than \(limit) MB, which is far more than a list of links."
+        }
+    }
+}
+
 /// Finds downloadable links in pasted text or a `.txt` file.
 public enum LinkParser {
     public static let maxLinks = 10_000
@@ -29,9 +39,7 @@ public enum LinkParser {
     /// Reads a text file of links. Refuses files larger than `maxFileSize`.
     public static func urls(inFileAt file: URL) throws -> [URL] {
         let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        guard size <= maxFileSize else {
-            throw DownloadError.invalidOption("the file is larger than \(maxFileSize / 1024 / 1024) MB")
-        }
+        guard size <= maxFileSize else { throw LinkParserError.fileTooLarge(limitMB: maxFileSize / 1024 / 1024) }
         let data = try Data(contentsOf: file)
         return urls(in: String(decoding: data, as: UTF8.self))
     }
@@ -59,6 +67,9 @@ public enum LinkParser {
         }
         return urls
     }
+
+    /// `text` as a URL, if it is an absolute `http(s)` link with a host.
+    public static func httpURL(_ text: String) -> URL? { downloadable(text) }
 
     private static func downloadable(_ text: String) -> URL? {
         let lower = text.lowercased()

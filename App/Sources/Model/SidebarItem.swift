@@ -1,0 +1,42 @@
+import DownloadKit
+
+enum SidebarItem: Hashable, Identifiable {
+    case all, active, completed, failed
+    case category(FileCategory)
+
+    var id: Self { self }
+
+    static let downloadItems: [SidebarItem] = [.all, .active, .completed, .failed]
+    static let categoryItems: [SidebarItem] = FileCategory.allCases.map(SidebarItem.category)
+
+    var title: String {
+        switch self {
+        case .all: "All Downloads"
+        case .active: "Active"
+        case .completed: "Completed"
+        case .failed: "Failed"
+        case .category(let category): category.title
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: "tray.full"
+        case .active: "arrow.down.circle"
+        case .completed: "checkmark.circle"
+        case .failed: "exclamationmark.triangle"
+        case .category(let category): category.symbol
+        }
+    }
+
+    /// "Active" is everything that is not finished: running, queued and paused downloads.
+    func includes(_ download: DownloadSnapshot) -> Bool {
+        switch self {
+        case .all: true
+        case .active: download.state != .completed && download.state != .failed
+        case .completed: download.state == .completed
+        case .failed: download.state == .failed
+        case .category(let category): download.category == category
+        }
+    }
+}

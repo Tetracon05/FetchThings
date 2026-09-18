@@ -14,6 +14,8 @@ public enum DownloadError: Error, Sendable, Equatable {
     case checksumMismatch(expected: String, actual: String)
     case shortRead
     case unsafeDestination(String)
+    /// The cookies or credentials saved for this download could not be read back.
+    case credentialsUnavailable
 
     /// Whether a fresh attempt of the same request may succeed.
     public var isRetryable: Bool {
@@ -57,6 +59,8 @@ extension DownloadError: LocalizedError {
         case .checksumMismatch(let expected, let actual): "Checksum mismatch (expected \(expected), got \(actual))."
         case .shortRead: "The connection closed before all data arrived."
         case .unsafeDestination(let why): "Unsafe destination: \(why)"
+        case .credentialsUnavailable:
+            "The cookies or credentials saved for this download could not be read (the keychain may be locked or the entry was removed). Remove the download and add it again."
         }
     }
 }

@@ -6,6 +6,13 @@ public protocol JobStore: Sendable {
     func loadAll() async throws -> [DownloadRecord]
     func save(_ record: DownloadRecord) async throws
     func delete(id: DownloadID) async throws
+    /// Returns once every save and delete requested before this call has finished. Stores that write
+    /// synchronously need do nothing.
+    func flush() async
+}
+
+extension JobStore {
+    public func flush() async {}
 }
 
 /// One JSON file per download, so a progress checkpoint rewrites a few hundred bytes rather than the
@@ -43,6 +50,9 @@ public actor FileJobStore: JobStore {
     public func delete(id: DownloadID) throws {
         try? FileManager.default.removeItem(at: fileURL(id))
     }
+
+    /// An actor runs one call at a time, in order: by the time this runs, earlier saves are on disk.
+    public func flush() {}
 
     private func fileURL(_ id: DownloadID) -> URL {
         directory.appending(path: "\(id.uuidString).json", directoryHint: .notDirectory)

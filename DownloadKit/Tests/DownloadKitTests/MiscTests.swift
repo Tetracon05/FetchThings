@@ -96,7 +96,7 @@ struct LinkParserTests {
 
         let huge = Data(count: LinkParser.maxFileSize + 1)
         try huge.write(to: env.file("huge.txt"))
-        #expect(throws: DownloadError.self) { try LinkParser.urls(inFileAt: env.file("huge.txt")) }
+        #expect(throws: LinkParserError.fileTooLarge(limitMB: 5)) { try LinkParser.urls(inFileAt: env.file("huge.txt")) }
     }
 
     @Test func capsTheNumberOfLinks() {
