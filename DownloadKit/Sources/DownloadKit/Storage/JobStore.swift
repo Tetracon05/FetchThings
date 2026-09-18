@@ -1,0 +1,56 @@
+import Foundation
+
+/// Persists download records so queued, paused and interrupted downloads survive a restart.
+public protocol JobStore: Sendable {
+    /// Every readable record, ordered by queue position. Unreadable files are skipped.
+    func loadAll() async throws -> [DownloadRecord]
+    func save(_ record: DownloadRecord) async throws
+    func delete(id: DownloadID) async throws
+}
+
+/// One JSON file per download, so a progress checkpoint rewrites a few hundred bytes rather than the
+/// whole list. The directory is private to the user (0700) because URLs can carry tokens.
+public actor FileJobStore: JobStore {
+    private let directory: URL
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    public init(directory: URL) {
+        self.directory = directory
+        encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+    }
+
+    public func loadAll() throws -> [DownloadRecord] {
+        try ensureDirectory()
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        return files
+            .filter { $0.pathExtension == "json" }
+            .compactMap { file in (try? Data(contentsOf: file)).flatMap { try? decoder.decode(DownloadRecord.self, from: $0) } }
+            .sorted { ($0.sequence, $0.createdAt) < ($1.sequence, $1.createdAt) }
+    }
+
+    public func save(_ record: DownloadRecord) throws {
+        try ensureDirectory()
+        let file = fileURL(record.id)
+        try encoder.encode(record).write(to: file, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
+
+    public func delete(id: DownloadID) throws {
+        try? FileManager.default.removeItem(at: fileURL(id))
+    }
+
+    private func fileURL(_ id: DownloadID) -> URL {
+        directory.appending(path: "\(id.uuidString).json", directoryHint: .notDirectory)
+    }
+
+    private func ensureDirectory() throws {
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]
+        )
+    }
+}
