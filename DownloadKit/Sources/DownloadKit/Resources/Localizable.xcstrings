@@ -1,0 +1,227 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "Unsupported URL: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported URL: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desteklenmeyen URL: %@"
+          }
+        }
+      }
+    },
+    "Invalid option: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid option: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geçersiz seçenek: %@"
+          }
+        }
+      }
+    },
+    "The server responded with HTTP %lld (%@).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server responded with HTTP %lld (%@)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sunucu HTTP %lld (%@) yanıtı verdi."
+          }
+        }
+      }
+    },
+    "The server ignored the byte-range request.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server ignored the byte-range request."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sunucu bayt aralığı isteğini yok saydı."
+          }
+        }
+      }
+    },
+    "Unexpected range response: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unexpected range response: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beklenmeyen aralık yanıtı: %@"
+          }
+        }
+      }
+    },
+    "The file changed on the server during the download.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file changed on the server during the download."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dosya, indirme sırasında sunucuda değişti."
+          }
+        }
+      }
+    },
+    "Not enough disk space (%@ needed, %@ available).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough disk space (%@ needed, %@ available)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yeterli disk alanı yok (%@ gerekli, %@ kullanılabilir)."
+          }
+        }
+      }
+    },
+    "File error: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File error: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dosya hatası: %@"
+          }
+        }
+      }
+    },
+    "Checksum mismatch (expected %@, got %@).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checksum mismatch (expected %@, got %@)."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sağlama toplamı uyuşmuyor (beklenen %@, alınan %@)."
+          }
+        }
+      }
+    },
+    "The connection closed before all data arrived.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection closed before all data arrived."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bağlantı, tüm veri gelmeden kapandı."
+          }
+        }
+      }
+    },
+    "Unsafe destination: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsafe destination: %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Güvenli olmayan hedef: %@"
+          }
+        }
+      }
+    },
+    "The cookies or credentials saved for this download could not be read (the keychain may be locked or the entry was removed). Remove the download and add it again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The cookies or credentials saved for this download could not be read (the keychain may be locked or the entry was removed). Remove the download and add it again."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu indirme için kaydedilen çerezler veya kimlik bilgileri okunamadı (anahtarlık kilitli olabilir ya da kayıt kaldırılmış olabilir). İndirmeyi kaldırıp yeniden ekleyin."
+          }
+        }
+      }
+    },
+    "The file is larger than %lld MB, which is far more than a list of links.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is larger than %lld MB, which is far more than a list of links."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dosya %lld MB'tan büyük; bu, bir bağlantı listesi için fazlasıyla büyük."
+          }
+        }
+      }
+    }
+  }
+}

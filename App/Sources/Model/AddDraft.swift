@@ -30,6 +30,21 @@ struct AddDraft: Equatable {
         self.userAgent = userAgent
     }
 
+    /// Adds links that are not in the list yet, one per line after what is already there.
+    mutating func append(_ urls: [URL]) {
+        var known = Set(links)
+        let fresh = urls.filter { known.insert($0).inserted }
+        guard !fresh.isEmpty else { return }
+        var text = linksText
+        if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
+        linksText = text + fresh.map(\.absoluteString).joined(separator: "\n")
+    }
+
+    /// Takes one link out. What is left is written back as one link per line (other text in the field goes with it).
+    mutating func remove(_ url: URL) {
+        linksText = links.filter { $0 != url }.map(\.absoluteString).joined(separator: "\n")
+    }
+
     /// Basic-auth credentials would go over the wire in clear text.
     var sendsCredentialsOverPlainHTTP: Bool {
         !username.isEmpty && links.contains { $0.scheme?.lowercased() == "http" }
@@ -100,10 +115,10 @@ enum AddDraftError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .noLinks: "Enter at least one http or https link."
-        case .filenameNeedsSingleLink: "A file name can only be set when adding a single link."
-        case .invalidReferer: "The Referer must be an http or https address."
-        case .invalidChecksum: "The checksum must be a SHA-256 or MD5 digest, for example sha256:9f86d0…"
+        case .noLinks: String(localized: "Enter at least one http or https link.")
+        case .filenameNeedsSingleLink: String(localized: "A file name can only be set when adding a single link.")
+        case .invalidReferer: String(localized: "The Referer must be an http or https address.")
+        case .invalidChecksum: String(localized: "The checksum must be a SHA-256 or MD5 digest, for example sha256:9f86d0…")
         case .invalidHeaderLine(let line): "“\(line)” is not a header. Write each one as Name: value."
         }
     }

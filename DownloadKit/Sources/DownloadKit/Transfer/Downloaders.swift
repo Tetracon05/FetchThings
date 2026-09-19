@@ -69,14 +69,24 @@ final class SegmentedDownloader: Downloader, Sendable {
         var fruitlessAttempts = 0
         while true {
             try Task.checkCancellation()
+            // A stall can only hold back a request that is still running. With small pieces the previous one may
+            // already be complete, so the next must wait out what the limiter is owed, or the limit is bypassed.
+            let owed = context.limiter.pendingDelay()
+            if owed > 0 { try await Task.sleep(for: .seconds(owed)) }
+
             guard let attempt = scheduler.prepareAttempt(index) else { return }
             let before = scheduler.received(index)
+
+            // While a speed limit is active, ask for the segment in small pieces: a piece that has been requested
+            // can be read ahead of any stall, so its size is the most that can slip past the limit. Each piece ends
+            // like an interrupted attempt, and the loop below carries on from what is committed.
+            let end = context.limiter.maxRequestBytes.map { min(attempt.end, attempt.offset + Int64($0) - 1) } ?? attempt.end
 
             var failure: DownloadError?
             do {
                 let transfer = SegmentTransfer(
-                    request: context.request.urlRequest(range: (attempt.offset, attempt.end), ifRange: context.validators.ifRange),
-                    expectation: .range(start: attempt.offset, end: attempt.end, total: context.totalBytes),
+                    request: context.request.urlRequest(range: (attempt.offset, end), ifRange: context.validators.ifRange),
+                    expectation: .range(start: attempt.offset, end: end, total: context.totalBytes),
                     validators: context.validators,
                     target: RangeTarget(scheduler: scheduler, index: index, file: file),
                     limiter: context.limiter,

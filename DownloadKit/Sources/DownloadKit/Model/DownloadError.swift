@@ -43,24 +43,28 @@ public enum DownloadError: Error, Sendable, Equatable {
 }
 
 extension DownloadError: LocalizedError {
+    /// The message templates are localized. The detail fragments passed in (`why`) are engine-level technical
+    /// text and stay in English.
     public var errorDescription: String? {
         switch self {
-        case .unsupportedURL(let why): "Unsupported URL: \(why)"
-        case .invalidOption(let why): "Invalid option: \(why)"
-        case .httpStatus(let code, _): "The server responded with HTTP \(code) (\(HTTPURLResponse.localizedString(forStatusCode: code)))."
+        case .unsupportedURL(let why): String(localized: "Unsupported URL: \(why)", bundle: .module)
+        case .invalidOption(let why): String(localized: "Invalid option: \(why)", bundle: .module)
+        case .httpStatus(let code, _): String(localized: "The server responded with HTTP \(code) (\(HTTPURLResponse.localizedString(forStatusCode: code))).", bundle: .module)
         case .network(let raw): URLError(URLError.Code(rawValue: raw)).localizedDescription
-        case .rangeNotHonored: "The server ignored the byte-range request."
-        case .invalidRangeResponse(let why): "Unexpected range response: \(why)"
-        case .resourceChanged: "The file changed on the server during the download."
+        case .rangeNotHonored: String(localized: "The server ignored the byte-range request.", bundle: .module)
+        case .invalidRangeResponse(let why): String(localized: "Unexpected range response: \(why)", bundle: .module)
+        case .resourceChanged: String(localized: "The file changed on the server during the download.", bundle: .module)
         case .insufficientDiskSpace(let needed, let available):
-            "Not enough disk space (\(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) needed, "
-                + "\(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)) available)."
-        case .fileSystem(let why): "File error: \(why)"
-        case .checksumMismatch(let expected, let actual): "Checksum mismatch (expected \(expected), got \(actual))."
-        case .shortRead: "The connection closed before all data arrived."
-        case .unsafeDestination(let why): "Unsafe destination: \(why)"
+            String(
+                localized: "Not enough disk space (\(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)) needed, \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)) available).",
+                bundle: .module
+            )
+        case .fileSystem(let why): String(localized: "File error: \(why)", bundle: .module)
+        case .checksumMismatch(let expected, let actual): String(localized: "Checksum mismatch (expected \(expected), got \(actual)).", bundle: .module)
+        case .shortRead: String(localized: "The connection closed before all data arrived.", bundle: .module)
+        case .unsafeDestination(let why): String(localized: "Unsafe destination: \(why)", bundle: .module)
         case .credentialsUnavailable:
-            "The cookies or credentials saved for this download could not be read (the keychain may be locked or the entry was removed). Remove the download and add it again."
+            String(localized: "The cookies or credentials saved for this download could not be read (the keychain may be locked or the entry was removed). Remove the download and add it again.", bundle: .module)
         }
     }
 }

@@ -5,7 +5,7 @@ public enum LinkParserError: LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .fileTooLarge(let limit): "The file is larger than \(limit) MB, which is far more than a list of links."
+        case .fileTooLarge(let limit): String(localized: "The file is larger than \(limit) MB, which is far more than a list of links.", bundle: .module)
         }
     }
 }

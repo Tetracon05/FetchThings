@@ -22,13 +22,26 @@ public actor FileJobStore: JobStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
+    private static let fractionalStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let wholeSecondStyle = Date.ISO8601FormatStyle()
+
     public init(directory: URL) {
         self.directory = directory
         encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        // Fractional seconds matter: downloads added together differ by milliseconds, and `.iso8601` rounds
+        // that away, which scrambled the order of a batch after a restart.
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(date.formatted(Self.fractionalStyle))
+        }
         encoder.outputFormatting = [.sortedKeys]
         decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        // Job files written before that change hold whole seconds, so both forms are read.
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            if let date = try? Date(text, strategy: Self.fractionalStyle) { return date }
+            return try Date(text, strategy: Self.wholeSecondStyle)
+        }
     }
 
     public func loadAll() throws -> [DownloadRecord] {

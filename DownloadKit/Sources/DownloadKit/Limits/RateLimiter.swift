@@ -7,6 +7,14 @@ public protocol RateLimiting: Sendable {
     func reserve(_ bytes: Int) -> TimeInterval
     /// Stall time still owed, without consuming anything.
     func pendingDelay() -> TimeInterval
+    /// The most bytes a single request should ask for, or `nil` when there is no reason to hold back. Stalling a
+    /// connection cannot keep URLSession from reading several megabytes ahead of the stall, so a limit is only
+    /// as good as the amount each request is allowed to fetch: small requests bound the read-ahead.
+    var maxRequestBytes: Int? { get }
+}
+
+extension RateLimiting {
+    public var maxRequestBytes: Int? { nil }
 }
 
 /// Token bucket. Bytes are spent after they arrive, so the bucket can go into debt; the debt is what
@@ -66,6 +74,18 @@ public final class RateLimiter: RateLimiting, Sendable {
         }
     }
 
+    /// A quarter of a second of traffic at the current rate, but never so small that every request costs more in
+    /// set-up than it delivers, and never so large that it defeats the purpose.
+    public var maxRequestBytes: Int? {
+        state.withLock { s in
+            s.rate.map { min(Self.largestRequest, max(Self.smallestRequest, Int($0 * Self.requestSeconds))) }
+        }
+    }
+
+    static let smallestRequest = 128 * 1024
+    static let largestRequest = 4 * 1024 * 1024
+    private static let requestSeconds = 0.25
+
     private func refill(_ s: inout State, at t: TimeInterval) {
         defer { s.last = t }
         guard let rate = s.rate else { return }
@@ -93,5 +113,9 @@ public struct CompositeLimiter: RateLimiting {
 
     public func pendingDelay() -> TimeInterval {
         limiters.reduce(0) { max($0, $1.pendingDelay()) }
+    }
+
+    public var maxRequestBytes: Int? {
+        limiters.compactMap(\.maxRequestBytes).min()
     }
 }

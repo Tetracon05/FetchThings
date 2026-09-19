@@ -10,13 +10,13 @@ enum FileCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     var title: String {
         switch self {
-        case .documents: "Documents"
-        case .archives: "Archives"
-        case .video: "Video"
-        case .audio: "Audio"
-        case .images: "Images"
-        case .applications: "Applications"
-        case .other: "Other"
+        case .documents: String(localized: "Documents")
+        case .archives: String(localized: "Archives")
+        case .video: String(localized: "Video")
+        case .audio: String(localized: "Audio")
+        case .images: String(localized: "Images")
+        case .applications: String(localized: "Applications")
+        case .other: String(localized: "Other")
         }
     }
 

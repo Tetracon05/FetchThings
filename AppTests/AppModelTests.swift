@@ -1,6 +1,7 @@
 import DownloadKit
 import Foundation
 import Testing
+import UniformTypeIdentifiers
 @testable import Downloader
 
 @MainActor
@@ -19,7 +20,7 @@ struct AppModelTests {
     // MARK: Events
 
     @Test func loadsThenAppliesSettingsThenFollowsEvents() async {
-        let ctx = makeModel { $0.maxConcurrentDownloads = 4; $0.speedLimitKBps = 500 }
+        let ctx = makeModel { $0.maxConcurrentDownloads = 4; $0.speedMode = .low; $0.lowLimitKBps = 500 }
         #expect(await started(2, [snapshot("a.zip"), snapshot("b.zip")], ctx))
         let calls = await ctx.engine.calls
         // Limits go in before anything is loaded: restored downloads start the moment they are loaded.
@@ -138,6 +139,10 @@ struct AppModelTests {
 
     // MARK: Selection
 
+    @Test func detailsPaneIsHiddenUntilTheUserOpensIt() {
+        #expect(makeModel().model.showInspector == false)
+    }
+
     @Test func inspectorShowsOnlyASingleSelection() async {
         let ctx = makeModel()
         let a = snapshot("a.zip"), b = snapshot("b.zip")
@@ -162,6 +167,125 @@ struct AppModelTests {
         ctx.model.selection = [done.id]
         #expect(!ctx.model.canPauseSelection && !ctx.model.canResumeSelection && ctx.model.canRevealSelection)
         await ctx.model.shutdown()
+    }
+
+    // MARK: Files
+
+    /// A folder with a real file per name, removed by the caller.
+    private func folder(with names: [String]) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AppModelFiles-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for name in names { try Data("x".utf8).write(to: folder.appendingPathComponent(name)) }
+        return folder
+    }
+
+    @Test func onlyAFinishedFileThatIsStillThereCanBeDraggedOrPreviewed() async throws {
+        let dir = try folder(with: ["done.mov"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctx = makeModel()
+        let done = snapshot("done.mov", state: .completed, finalURL: dir.appendingPathComponent("done.mov"))
+        let running = snapshot("run.mov", state: .downloading, finalURL: nil)
+        let moved = snapshot("moved.mov", state: .completed, finalURL: dir.appendingPathComponent("moved.mov"))
+        // Not finished, but with a file name on disk already: still nothing to hand over.
+        let unfinished = snapshot("done.mov", state: .paused, finalURL: dir.appendingPathComponent("done.mov"))
+        #expect(await started(4, [done, running, moved, unfinished], ctx))
+
+        let model = ctx.model
+        #expect(model.availableFile(of: done) == dir.appendingPathComponent("done.mov"))
+        #expect(model.availableFile(of: running) == nil)
+        #expect(model.availableFile(of: moved) == nil)
+        #expect(model.availableFile(of: unfinished) == nil)
+
+        // The drag carries the file itself, as a file URL (what Finder and other apps accept).
+        let provider = try #require(model.dragProvider(for: done))
+        #expect(provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier))
+        #expect(model.dragProvider(for: running) == nil)
+        #expect(model.dragProvider(for: moved) == nil)
+        await model.shutdown()
+    }
+
+    @Test func draggingFromThePaneHandsOverOnlyFilesThatExistInTheOrderGiven() async throws {
+        let dir = try folder(with: ["a.png", "b.png"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctx = makeModel()
+        let a = snapshot("a.png", state: .completed, finalURL: dir.appendingPathComponent("a.png"))
+        let b = snapshot("b.png", state: .completed, finalURL: dir.appendingPathComponent("b.png"))
+        let running = snapshot("r.png", state: .downloading)
+        let gone = snapshot("gone.png", state: .completed, finalURL: dir.appendingPathComponent("gone.png"))
+        #expect(await started(4, [a, b, running, gone], ctx))
+
+        #expect(ctx.model.dragFiles(of: [b, running, gone, a]) == [dir.appendingPathComponent("b.png"), dir.appendingPathComponent("a.png")])
+        #expect(ctx.model.dragFiles(of: [running, gone]).isEmpty)
+        #expect(ctx.model.dragFiles(of: []).isEmpty)
+        await ctx.model.shutdown()
+    }
+
+    @Test func everyDragOutOfTheAppCarriesTheMarkThatLetsTheWindowRefuseIt() async throws {
+        let dir = try folder(with: ["a.png"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctx = makeModel()
+        let file = dir.appendingPathComponent("a.png")
+        let a = snapshot("a.png", state: .completed, finalURL: file)
+        #expect(await started(1, [a], ctx))
+
+        // A row dragged out of the list.
+        let provider = try #require(ctx.model.dragProvider(for: a))
+        #expect(provider.hasItemConformingToTypeIdentifier(OwnDrag.identifier))
+        #expect(provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier))
+        // The picture or pile dragged out of the details pane.
+        let item = DragSourceView.pasteboardItem(for: file)
+        #expect(item.types.contains(OwnDrag.pasteboardType))
+        #expect(item.string(forType: .fileURL) == file.absoluteString)
+        await ctx.model.shutdown()
+    }
+
+    @Test func quickLookShowsTheSelectedFinishedFilesInListOrder() async throws {
+        let dir = try folder(with: ["a.png", "b.png", "c.png"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctx = makeModel()
+        let a = snapshot("a.png", state: .completed, created: 3, finalURL: dir.appendingPathComponent("a.png"))
+        let b = snapshot("b.png", state: .completed, created: 2, finalURL: dir.appendingPathComponent("b.png"))
+        let c = snapshot("c.png", state: .completed, created: 1, finalURL: dir.appendingPathComponent("c.png"))
+        let running = snapshot("r.png", state: .downloading, created: 0)
+        #expect(await started(4, [a, b, c, running], ctx))
+        let model = ctx.model
+
+        #expect(model.quickLookItems.isEmpty) // nothing selected
+        #expect(!model.canQuickLookSelection)
+        model.selection = [running.id]
+        #expect(model.quickLookItems.isEmpty) // nothing to show yet
+        #expect(!model.canQuickLookSelection)
+        model.selection = Set([a, b, c, running].map(\.id))
+        // The running one is left out; the rest come in the order the list shows them.
+        #expect(model.quickLookItems.map(\.title) == model.visibleDownloads.filter { $0.state == .completed }.map(\.displayName))
+        #expect(model.quickLookItems.count == 3)
+        model.selection = [b.id]
+        #expect(model.canQuickLookSelection)
+        #expect(model.quickLookItems.map(\.url) == [dir.appendingPathComponent("b.png")])
+        await model.shutdown()
+    }
+
+    @Test func theArrowKeysMoveASingleSelectionAndStopAtTheEnds() async {
+        let ctx = makeModel()
+        let a = snapshot("a", created: 3), b = snapshot("b", created: 2), c = snapshot("c", created: 1)
+        #expect(await started(3, [a, b, c], ctx))
+        let model = ctx.model
+        let order = model.visibleDownloads.map(\.id)
+
+        model.moveSelection(by: 1)
+        #expect(model.selection.isEmpty) // nothing selected: nothing to move
+        model.selection = [order[0]]
+        model.moveSelection(by: -1)
+        #expect(model.selection == [order[0]]) // at the top already
+        model.moveSelection(by: 1)
+        #expect(model.selection == [order[1]])
+        model.moveSelection(by: 1)
+        model.moveSelection(by: 1)
+        #expect(model.selection == [order[2]]) // stops at the bottom
+        model.selection = [order[0], order[1]]
+        model.moveSelection(by: 1)
+        #expect(model.selection == [order[0], order[1]]) // several selected: left alone
+        await model.shutdown()
     }
 
     // MARK: Actions
@@ -278,7 +402,7 @@ struct AppModelTests {
         let ctx = makeModel()
         ctx.model.handleIncoming(urls: [URL(string: "ftp://example.com/x")!, URL(filePath: "/tmp/does-not-exist.txt")])
         #expect(await eventually { ctx.model.alert != nil })
-        #expect(ctx.model.alert?.title == "No Links Found")
+        #expect(ctx.model.alert?.title == String(localized: "No Links Found"))
         #expect(!ctx.model.showAddSheet)
     }
 
@@ -301,7 +425,7 @@ struct AppModelTests {
 
         let empty = makeModel()
         empty.model.addFromClipboard()
-        #expect(await eventually { empty.model.alert?.title == "No Links on the Clipboard" })
+        #expect(await eventually { empty.model.alert?.title == String(localized: "No Links on the Clipboard") })
     }
 
     // MARK: Clipboard watching
@@ -362,10 +486,28 @@ struct AppModelTests {
     @Test func settingsAreAppliedToTheEngine() async {
         let ctx = makeModel { $0.maxConcurrentDownloads = 2 }
         await ctx.model.applyEngineSettings()
-        ctx.settings.speedLimitKBps = 0
+        ctx.settings.speedMode = .normal
         await ctx.model.applyEngineSettings()
         let calls = await ctx.engine.calls
-        #expect(calls == ["maxConcurrent 2", "globalLimit nil", "maxConcurrent 2", "globalLimit nil"])
+        #expect(calls == ["maxConcurrent 2", "globalLimit nil", "maxConcurrent 2", "globalLimit 4096000"])
+    }
+
+    @Test func pickingASpeedModeLimitsAllDownloadsAtOnce() async {
+        let ctx = makeModel()
+        ctx.model.selectSpeedMode(.low)
+        #expect(ctx.settings.speedMode == .low)
+        #expect(await eventually { await ctx.engine.calls.contains("globalLimit 1024000") })
+
+        ctx.model.selectSpeedMode(.normal)
+        #expect(await eventually { await ctx.engine.calls.contains("globalLimit 4096000") })
+
+        ctx.model.selectSpeedMode(.high)
+        #expect(await eventually { await ctx.engine.calls.last == "globalLimit nil" }, "High removes the limit")
+
+        let before = await ctx.engine.calls.count
+        ctx.model.selectSpeedMode(.high) // already High: nothing to tell the engine
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(await ctx.engine.calls.count == before)
     }
 }
 

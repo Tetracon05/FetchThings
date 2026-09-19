@@ -62,6 +62,24 @@ struct RateLimiterTests {
         #expect(abs(rate - 50_000) / 50_000 < 0.06, "measured \(rate) B/s")
     }
 
+    @Test func requestSizeFollowsTheRateWithinBounds() {
+        #expect(RateLimiter(bytesPerSecond: nil).maxRequestBytes == nil, "no limit, no reason to hold back")
+        #expect(RateLimiter(bytesPerSecond: 1_024_000).maxRequestBytes == 256_000, "a quarter second of traffic")
+        #expect(RateLimiter(bytesPerSecond: 10_000).maxRequestBytes == RateLimiter.smallestRequest, "not so small that set-up dominates")
+        #expect(RateLimiter(bytesPerSecond: 500_000_000).maxRequestBytes == RateLimiter.largestRequest, "not so large that it defeats the limit")
+
+        let limiter = RateLimiter(bytesPerSecond: 1_024_000)
+        limiter.setRate(nil)
+        #expect(limiter.maxRequestBytes == nil, "lifting the limit lifts the cap")
+    }
+
+    @Test func compositeUsesTheSmallestRequestSize() {
+        let slow = RateLimiter(bytesPerSecond: 1_024_000), fast = RateLimiter(bytesPerSecond: 8_000_000), none = RateLimiter()
+        #expect(CompositeLimiter([slow, fast]).maxRequestBytes == 256_000)
+        #expect(CompositeLimiter([none, fast]).maxRequestBytes == 2_000_000)
+        #expect(CompositeLimiter([none, none]).maxRequestBytes == nil)
+    }
+
     @Test func changingTheRateAppliesImmediately() {
         let clock = FakeClock()
         let limiter = RateLimiter(bytesPerSecond: 1000, now: clock.reader)

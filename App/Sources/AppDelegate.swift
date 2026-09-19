@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
         // Not tied to the window: downloads resume and are observed even if the window never appears.
+        // UI testing only (sandbox mode): force an appearance without touching system settings.
+        if AppEnvironment.sandboxDirectory != nil, let name = ProcessInfo.processInfo.environment["DOWNLOADER_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
+        }
         AppModel.shared.start()
     }
 
@@ -20,6 +25,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { MainWindow.showIfHidden() }
         return true
+    }
+
+    // Quick Look (Space in the table) asks the responder chain, the app delegate included, who runs its preview panel.
+    // Quick Look calls these on the main thread; the overrides are not main-actor isolated, so say so.
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { QuickLookController.shared.attach(to: panel) }
+    }
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated { QuickLookController.shared.detach(from: panel) }
     }
 
     /// Stop the transfers and save their progress before quitting, but never hang the quit on it.

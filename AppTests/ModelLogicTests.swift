@@ -69,15 +69,21 @@ struct FormattingTests {
         #expect(Formatters.speed(0) == "—")
         #expect(Formatters.speed(0.5) == "—")
         #expect(Formatters.size(nil) == "—")
-        #expect(Formatters.speed(2_500_000).hasSuffix("/s"))
+        #expect(Formatters.speed(2_500_000).contains("MB"), "the unit suffix after it is localized, so only the size is checked")
         #expect(Formatters.size(1_500_000).contains("MB"))
+    }
+
+    @Test func zeroBytesAreWrittenAsANumber() {
+        // The default byte-count style spells zero out ("Zero kB").
+        let zero = Formatters.bytes(0)
+        #expect(zero.contains("0") && !zero.lowercased().contains("zero"), "\(zero)")
     }
 
     @Test func etaIsCompact() {
         #expect(Formatters.eta(nil) == "—")
         #expect(Formatters.eta(.infinity) == "—")
         #expect(Formatters.eta(-3) == "—")
-        #expect(Formatters.eta(0.2) == "< 1 sec")
+        #expect(Formatters.eta(0.2) == String(localized: "< 1 sec"))
         #expect(Formatters.eta(45).contains("45"))
         // Two units at most: 1 h 5 min, not 1 h 5 min 12 s.
         let long = Formatters.eta(3912)
@@ -123,7 +129,8 @@ struct SettingsTests {
         let s = AppSettings(defaults: defaults())
         #expect(s.segmentCount == 8)
         #expect(s.maxConcurrentDownloads == 3)
-        #expect(s.speedLimitKBps == 0 && s.globalSpeedLimit == nil)
+        #expect(s.speedMode == .high && s.globalSpeedLimit == nil, "unlimited until the user picks a mode")
+        #expect(s.lowLimitKBps == 1024 && s.normalLimitKBps == 4096)
         #expect(!s.detectClipboard, "clipboard detection is opt-in")
         #expect(s.downloadFolder.lastPathComponent == "Downloads")
     }
@@ -133,14 +140,17 @@ struct SettingsTests {
         let first = AppSettings(defaults: d)
         first.segmentCount = 16
         first.maxConcurrentDownloads = 5
-        first.speedLimitKBps = 250
+        first.speedMode = .low
+        first.lowLimitKBps = 250
+        first.normalLimitKBps = 900
         first.detectClipboard = true
         first.defaultUserAgent = "Custom/1"
         first.downloadFolder = URL(filePath: "/tmp/elsewhere", directoryHint: .isDirectory)
 
         let second = AppSettings(defaults: d)
         #expect(second.segmentCount == 16 && second.maxConcurrentDownloads == 5)
-        #expect(second.speedLimitKBps == 250 && second.globalSpeedLimit == 250_000)
+        #expect(second.speedMode == .low && second.lowLimitKBps == 250 && second.normalLimitKBps == 900)
+        #expect(second.globalSpeedLimit == 250_000)
         #expect(second.detectClipboard && second.defaultUserAgent == "Custom/1")
         #expect(second.downloadFolder.path == "/tmp/elsewhere")
     }
@@ -149,10 +159,53 @@ struct SettingsTests {
         let d = defaults()
         d.set(500, forKey: "segmentCount")
         d.set(-4, forKey: "maxConcurrentDownloads")
-        d.set(-100, forKey: "speedLimitKBps")
+        d.set(-100, forKey: "lowLimitKBps")
+        d.set("warp speed", forKey: "speedMode")
         let s = AppSettings(defaults: d)
         #expect(s.segmentCount == AppSettings.segmentRange.upperBound)
         #expect(s.maxConcurrentDownloads == AppSettings.concurrencyRange.lowerBound)
-        #expect(s.speedLimitKBps == 0)
+        #expect(s.lowLimitKBps == 1, "a limit of zero would silently mean unlimited")
+        #expect(s.speedMode == .high, "an unknown stored mode falls back to the default")
+    }
+
+    @Test func eachModeHasItsOwnLimitAndHighIsUnlimited() {
+        let s = AppSettings(defaults: defaults())
+        s.speedMode = .low
+        #expect(s.limitKBps(for: .low) == 1024 && s.globalSpeedLimit == 1_024_000)
+        s.speedMode = .normal
+        #expect(s.limitKBps(for: .normal) == 4096 && s.globalSpeedLimit == 4_096_000)
+        s.speedMode = .high
+        #expect(s.limitKBps(for: .high) == 0 && s.globalSpeedLimit == nil)
+    }
+}
+
+@Suite("Toolbar search field width")
+struct SearchFieldLayoutTests {
+    @Test func isTheCardsWidthWhenThereIsRoomAndNeverWiderThanIt() {
+        #expect(SearchFieldLayout.width(detailAreaWidth: 1400) == MainWindowLayout.paneWidth)
+        #expect(SearchFieldLayout.width(detailAreaWidth: 100_000) == MainWindowLayout.paneWidth)
+    }
+
+    @Test func shrinksWithTheWindowButNeverBelowItsFloor() {
+        #expect(SearchFieldLayout.width(detailAreaWidth: 700) == 700 - SearchFieldLayout.otherToolbarItems)
+        #expect(SearchFieldLayout.width(detailAreaWidth: SearchFieldLayout.smallestRealArea) >= SearchFieldLayout.narrowest)
+    }
+
+    @Test func aMeasurementTakenBeforeTheLayoutSettledIsIgnored() {
+        // Right after launch the area reads as nothing or far too small; using it left the toolbar with a slot the width
+        // of the floor and the field spilling out of the window.
+        for unsettled in [0, -50, 1, 200, SearchFieldLayout.smallestRealArea - 1] as [CGFloat] {
+            #expect(SearchFieldLayout.width(detailAreaWidth: unsettled) == SearchFieldLayout.widest)
+        }
+    }
+
+    @Test func growsSmoothlyFromTheFloorToTheCard() {
+        var previous = SearchFieldLayout.narrowest
+        for area in stride(from: SearchFieldLayout.smallestRealArea, through: 1200, by: 10) {
+            let width = SearchFieldLayout.width(detailAreaWidth: area)
+            #expect(width >= previous)
+            #expect((SearchFieldLayout.narrowest...MainWindowLayout.paneWidth).contains(width))
+            previous = width
+        }
     }
 }

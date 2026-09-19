@@ -69,14 +69,35 @@ struct Phase2ReviewTests {
 
     // MARK: Removal
 
-    @Test func removingFinishedOrUntouchedDownloadsNeedsNoConfirmation() async {
+    @Test func removingOneFinishedOrUntouchedDownloadNeedsNoConfirmation() async {
         let ctx = makeModel()
         let done = snapshot("d.zip", state: .completed), queued = snapshot("q.zip", state: .queued, total: 1000, received: 0)
         #expect(await started([done, queued], ctx))
-        ctx.model.requestRemoval([done.id, queued.id])
+        ctx.model.requestRemoval([done.id])
+        ctx.model.requestRemoval([queued.id])
         #expect(ctx.model.pendingRemoval == nil)
         #expect(await eventually { await ctx.engine.calls.filter { $0.hasPrefix("remove") }.count == 2 })
         #expect(await ctx.engine.calls.allSatisfy { !$0.contains("deleteFiles=true") }, "finished files are kept by default")
+        await ctx.model.shutdown()
+    }
+
+    @Test func removingSeveralEntriesAsksFirstEvenWhenNothingIsPartial() async {
+        // Select All, then Delete, must not empty the list in one keystroke.
+        let ctx = makeModel()
+        let done = snapshot("d.zip", state: .completed), queued = snapshot("q.zip", state: .queued, total: 1000, received: 0)
+        #expect(await started([done, queued], ctx))
+
+        ctx.model.requestRemoval([done.id, queued.id])
+        let pending = try? #require(ctx.model.pendingRemoval)
+        #expect(pending?.totalCount == 2 && pending?.partialCount == 0)
+        #expect(pending?.title.contains("2") == true)
+        #expect(pending?.message.contains(String(localized: "They will be removed from the list.")) == true)
+        #expect(pending?.message.contains(String(localized: "Finished files are kept.")) == true)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(!(await ctx.engine.calls.contains { $0.hasPrefix("remove") }), "nothing is removed before the user confirms")
+
+        ctx.model.confirmRemoval()
+        #expect(await eventually { await ctx.engine.calls.filter { $0.hasPrefix("remove") }.count == 2 })
         await ctx.model.shutdown()
     }
 
@@ -88,7 +109,8 @@ struct Phase2ReviewTests {
         ctx.model.requestRemoval([partial.id, done.id])
         let pending = try? #require(ctx.model.pendingRemoval)
         #expect(pending?.partialCount == 1 && pending?.totalCount == 2)
-        #expect(pending?.message.contains("deleted") == true && pending?.message.contains("kept") == true)
+        #expect(pending?.message.contains(String(localized: "The data downloaded so far for 1 of them will be deleted, and can’t be recovered.")) == true)
+        #expect(pending?.message.contains(String(localized: "Finished files are kept.")) == true)
         try? await Task.sleep(for: .milliseconds(80))
         #expect(!(await ctx.engine.calls.contains { $0.hasPrefix("remove") }), "nothing happens before the user confirms")
 
@@ -114,6 +136,7 @@ struct Phase2ReviewTests {
         ctx.model.trash = { trashed.append($0.path) }
 
         ctx.model.requestRemoval([done.id, running.id], trashFiles: true)
+        ctx.model.confirmRemoval() // two entries at once are confirmed first
         #expect(await eventually { await ctx.engine.calls.filter { $0.hasPrefix("remove") }.count == 2 })
         #expect(trashed == ["/tmp/dl/d.zip"], "only finished files are trashed")
         #expect(await ctx.engine.calls.allSatisfy { $0.hasSuffix("deleteFiles=false") || !$0.hasPrefix("remove") }, "the engine must not delete permanently")
@@ -129,6 +152,7 @@ struct Phase2ReviewTests {
             throw url.lastPathComponent == "gone.zip" ? CocoaError(.fileNoSuchFile) : CocoaError(.fileWriteNoPermission)
         }
         ctx.model.requestRemoval([stuck.id, gone.id], trashFiles: true)
+        ctx.model.confirmRemoval() // two entries at once are confirmed first
 
         #expect(await eventually { ctx.model.alert != nil })
         #expect(ctx.model.alert?.title.contains("stuck.zip") == true)
@@ -150,11 +174,12 @@ struct Phase2ReviewTests {
     @Test func hugeStoredOrTypedLimitsDoNotCrashSettingsOrTheDraft() {
         let suite = "DownloaderTests.huge.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defaults.set(Int.max, forKey: "speedLimitKBps") // as if a huge number had been persisted
+        defaults.set(Int.max, forKey: "lowLimitKBps") // as if a huge number had been persisted
+        defaults.set("low", forKey: "speedMode")
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.speedLimitKBps == SpeedLimit.maxKBps)
+        #expect(settings.lowLimitKBps == SpeedLimit.maxKBps)
         #expect(settings.globalSpeedLimit == Int64(SpeedLimit.maxKBps) * 1000)
-        settings.speedLimitKBps = Int.max // typed into the field
+        settings.lowLimitKBps = Int.max // typed into the field
         #expect(settings.globalSpeedLimit == Int64(SpeedLimit.maxKBps) * 1000)
 
         var draft = AddDraft(folder: URL(filePath: "/tmp"), segmentCount: 4)
@@ -197,12 +222,14 @@ struct Phase2ReviewTests {
 
         let resolution = await IncomingLinks.resolve([big])
         #expect(resolution.links.isEmpty)
-        #expect(resolution.problems.first?.contains("huge.txt") == true && resolution.problems.first?.contains("larger") == true, "\(resolution.problems)")
+        // The wording is localized, so check that the problem names the file and carries the engine's own explanation.
+        let explanation = LinkParserError.fileTooLarge(limitMB: LinkParser.maxFileSize / 1_048_576).errorDescription ?? ""
+        #expect(resolution.problems.first?.contains("huge.txt") == true && resolution.problems.first?.contains(explanation) == true, "\(resolution.problems)")
 
         let ctx = makeModel()
         ctx.model.handleIncoming(urls: [big])
         #expect(await eventually { ctx.model.alert != nil })
-        #expect(ctx.model.alert?.message.contains("larger") == true)
+        #expect(ctx.model.alert?.message.contains(explanation) == true)
         #expect(!ctx.model.showAddSheet)
     }
 
@@ -222,7 +249,7 @@ struct Phase2ReviewTests {
     // MARK: Start-up order
 
     @Test func limitsAreAppliedBeforeAnythingIsLoaded() async {
-        let ctx = makeModel { $0.maxConcurrentDownloads = 2; $0.speedLimitKBps = 100 }
+        let ctx = makeModel { $0.maxConcurrentDownloads = 2; $0.speedMode = .low; $0.lowLimitKBps = 100 }
         ctx.model.start()
         _ = await eventually { await ctx.engine.calls.contains("load") }
         let calls = await ctx.engine.calls

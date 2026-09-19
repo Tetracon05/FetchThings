@@ -14,7 +14,8 @@ struct AddOutcome: Equatable {
     var failures: [String] = []
 }
 
-/// A removal waiting for the user to confirm, because it would throw partly downloaded data away.
+/// A removal waiting for the user to confirm: it would throw partly downloaded data away, or take several
+/// entries off the list at once.
 struct PendingRemoval: Equatable, Identifiable {
     let id = UUID()
     var ids: Set<DownloadID>
@@ -23,12 +24,21 @@ struct PendingRemoval: Equatable, Identifiable {
     var partialCount: Int
     var totalCount: Int
 
-    var title: String { totalCount == 1 ? "Remove this download?" : "Remove \(totalCount) downloads?" }
+    var title: String {
+        totalCount == 1 ? String(localized: "Remove this download?") : String(localized: "Remove \(totalCount) downloads?")
+    }
 
+    /// Two whole sentences (what happens to partial data, what happens to finished files) joined by a space, so each
+    /// can be translated as a sentence rather than assembled from fragments.
     var message: String {
-        let partial = partialCount == 1
-            ? "The data downloaded so far will be deleted, and can’t be recovered."
-            : "The data downloaded so far for \(partialCount) of them will be deleted, and can’t be recovered."
-        return trashFiles ? partial + " Finished files are moved to the Trash." : partial + " Finished files are kept."
+        let files = trashFiles ? String(localized: "Finished files are moved to the Trash.") : String(localized: "Finished files are kept.")
+        let partial: String
+        switch partialCount {
+        case 0: partial = String(localized: "They will be removed from the list.")
+        case 1 where totalCount == 1: partial = String(localized: "The data downloaded so far will be deleted, and can’t be recovered.")
+        case 1: partial = String(localized: "The data downloaded so far for 1 of them will be deleted, and can’t be recovered.")
+        default: partial = String(localized: "The data downloaded so far for \(partialCount) of them will be deleted, and can’t be recovered.")
+        }
+        return partial + " " + files
     }
 }

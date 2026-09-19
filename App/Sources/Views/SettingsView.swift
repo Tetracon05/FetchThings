@@ -11,7 +11,7 @@ struct SettingsView: View {
             NetworkSettings(model: model)
                 .tabItem { Label("Network", systemImage: "network") }
         }
-        .frame(width: 480)
+        .frame(width: 520)
         .scenePadding()
     }
 }
@@ -22,30 +22,40 @@ private struct GeneralSettings: View {
 
     var body: some View {
         @Bindable var settings = model.settings
-        Form {
-            LabeledContent("Download folder") {
-                HStack {
-                    Text(settings.downloadFolder.displayPath)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 18) {
+            TileSection(title: Text("Downloads")) {
+                SettingTile(
+                    symbol: "folder.fill", tint: .blue, title: Text("Download folder"),
+                    detail: Text(settings.downloadFolder.displayPath)
+                ) {
                     Button("Choose…") { choosingFolder = true }
+                        .glassButton()
+                }
+                SettingTile(
+                    symbol: "arrow.triangle.branch", tint: .purple, title: Text("Connections per download"),
+                    detail: Text("Each file is fetched in this many parts at once.")
+                ) {
+                    StepperControl(title: "Connections per download", value: $settings.segmentCount, range: AppSettings.segmentRange)
+                }
+                SettingTile(
+                    symbol: "square.stack.3d.down.right.fill", tint: .teal, title: Text("Downloads at once"),
+                    detail: Text("The rest wait in the queue.")
+                ) {
+                    StepperControl(title: "Downloads at once", value: $settings.maxConcurrentDownloads, range: AppSettings.concurrencyRange)
                 }
             }
-            Stepper(value: $settings.segmentCount, in: AppSettings.segmentRange) {
-                LabeledContent("Connections per download", value: "\(settings.segmentCount)")
-            }
-            Stepper(value: $settings.maxConcurrentDownloads, in: AppSettings.concurrencyRange) {
-                LabeledContent("Downloads at once", value: "\(settings.maxConcurrentDownloads)")
-            }
-            Section {
-                Toggle("Look for links on the clipboard", isOn: $settings.detectClipboard)
-            } footer: {
-                Text("Off by default. When on, Downloader offers to add web links you copy while it is the frontmost app. It never adds them by itself.")
-                    .foregroundStyle(.secondary)
+            TileSection(
+                title: Text("Clipboard"),
+                footer: Text("Off by default. When on, Downloader offers to add web links you copy while it is the frontmost app. It never adds them by itself.")
+            ) {
+                SettingTile(symbol: "doc.on.clipboard.fill", tint: .orange, title: Text("Look for links on the clipboard")) {
+                    Toggle("Look for links on the clipboard", isOn: $settings.detectClipboard)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
         }
-        .formStyle(.grouped)
+        .padding(.vertical, 8)
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { settings.downloadFolder = url }
         }
@@ -58,26 +68,51 @@ private struct NetworkSettings: View {
 
     var body: some View {
         @Bindable var settings = model.settings
-        Form {
-            LabeledContent("Speed limit") {
-                HStack {
-                    TextField("Speed limit", value: $settings.speedLimitKBps, format: .number, prompt: Text("0"))
-                        .labelsHidden()
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 80)
-                    Text("KB/s")
+        VStack(spacing: 18) {
+            TileSection(
+                title: Text("Speed modes"),
+                footer: Text("Choose a mode with the button at the bottom of the sidebar. It limits all downloads together. The limit is approximate for small files: the first part of a download can arrive before it takes hold.")
+            ) {
+                modeTile(.low, limit: $settings.lowLimitKBps)
+                modeTile(.normal, limit: $settings.normalLimitKBps)
+                SettingTile(symbol: SpeedMode.high.symbol, tint: SpeedMode.high.color, title: Text(SpeedMode.high.title)) {
+                    Text("Unlimited").foregroundStyle(.secondary)
                 }
             }
-            Text("Shared by all downloads. 0 means no limit. The limit is approximate for small files: the first part of a download can arrive before it takes hold.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Default user agent", text: $settings.defaultUserAgent, prompt: Text("System default"))
+            TileSection(title: Text("Requests")) {
+                SettingTile(symbol: "person.text.rectangle.fill", tint: .gray, title: Text("Default user agent")) {
+                    TextField("Default user agent", text: $settings.defaultUserAgent, prompt: Text("System default"))
+                        .labelsHidden()
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(width: 230)
+                        .fieldBackground()
+                }
+            }
         }
-        .formStyle(.grouped)
-        .onChange(of: settings.speedLimitKBps) {
-            let clamped = SpeedLimit.clamp(settings.speedLimitKBps)
-            if clamped != settings.speedLimitKBps { settings.speedLimitKBps = clamped }
-            Task { await model.applyEngineSettings() }
+        .padding(.vertical, 8)
+    }
+
+    private func modeTile(_ mode: SpeedMode, limit: Binding<Int>) -> some View {
+        SettingTile(symbol: mode.symbol, tint: mode.color, title: Text(mode.title)) {
+            HStack(spacing: 8) {
+                TextField("Speed limit", value: limit, format: .number.grouping(.never), prompt: Text("1"))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(width: 90)
+                    .fieldBackground()
+                    .onChange(of: limit.wrappedValue) {
+                        // Zero would mean unlimited, and a huge number would overflow: keep it in range.
+                        let clamped = AppSettings.limit(limit.wrappedValue, default: 1)
+                        if clamped != limit.wrappedValue { limit.wrappedValue = clamped }
+                        Task { await model.applyEngineSettings() }
+                    }
+                Text("KB/s").foregroundStyle(.secondary)
+            }
         }
     }
 }

@@ -24,6 +24,10 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # User-facing strings live in String Catalogs (App/Resources/Localizable.xcstrings); the compiler emits the
+    # strings it finds so `xcstringstool sync` can add new ones to the catalog.
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 
 targets:
   Downloader:
@@ -39,6 +43,9 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Downloader
+        CFBundleDevelopmentRegion: en
+        # The app's languages; add a language here and translate it in the String Catalogs.
+        CFBundleLocalizations: [en, tr]
         LSApplicationCategoryType: public.app-category.utilities
         LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         NSHumanReadableCopyright: ""

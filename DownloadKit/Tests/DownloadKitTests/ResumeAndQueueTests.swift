@@ -275,6 +275,81 @@ struct QueueTests {
         #expect(clock.now - start < .milliseconds(1000), "removing the limit must take effect")
     }
 
+    /// URLSession reads several megabytes ahead of a stalled connection, so with eight connections tens of
+    /// megabytes used to get through before a 1 MB/s limit took hold (a 48 MB file finished in three seconds).
+    /// While a limit is active each request now asks for a small piece and waits out the limiter's debt before the
+    /// next one, which bounds the burst and keeps the rate steady.
+    @Test func aLimitKeepsTheReadAheadSmallEvenWithEightConnections() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        // A server that hands over data as fast as the socket takes it. (`MockResource` builds its bodies as it
+        // goes, which is slow enough in a debug build for the client to keep up, and hid the problem.)
+        let blob = Data(repeating: 0x5A, count: 60_000_000)
+        let server = try await MockHTTPServer.start { request in
+            let headers = [("Accept-Ranges", "bytes"), ("ETag", "\"fast\""), ("Content-Type", "application/octet-stream")]
+            if request.method == "HEAD" { return MockResponse(status: 200, headers: headers + [("Content-Length", String(blob.count))]) }
+            guard let range = request.range else { return MockResponse(status: 200, headers: headers, body: .data(blob)) }
+            let end = min(range.end ?? blob.count - 1, blob.count - 1)
+            return MockResponse(status: 206, headers: headers + [("Content-Range", "bytes \(range.start)-\(end)/\(blob.count)")], body: .data(blob.subdata(in: range.start..<(end + 1))))
+        }
+        defer { server.stop() }
+        let manager = env.makeManager()
+        await manager.setGlobalSpeedLimit(1_000_000)
+
+        let id = try await manager.add(env.newDownload(server.url(), segments: 8))
+        try await Task.sleep(for: .milliseconds(700))
+        let burst = try #require(await manager.snapshot(id)).receivedBytes
+        try await Task.sleep(for: .seconds(3))
+        let later = try #require(await manager.snapshot(id)).receivedBytes
+        await manager.remove(id, deleteFiles: true)
+
+        // About 2 MB of pieces in flight and credit at the start, then roughly 1 MB/s. Unbounded read-ahead lets far
+        // more through in the first seconds (5 to 35 MB, 9.5 here) and then stalls to repay the debt.
+        #expect(later < 7_500_000, "\(later) bytes after 3.7 s of a 1 MB/s limit")
+        #expect(later - burst > 1_500_000, "only \(later - burst) more bytes in the next 3 s: the download stalled")
+        // (Waiting out the limiter's debt between pieces matters against a server much faster than this mock, where
+        // finished pieces would otherwise be replaced instantly: that was checked against a real one.)
+    }
+
+    @Test func aLimitedMultiSegmentDownloadIsStillByteForByteCorrect() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let resource = MockResource(size: 9_000_000)
+        let server = try await MockHTTPServer.start { resource.response(for: $0) }; defer { server.stop() }
+        let manager = env.makeManager()
+        await manager.setGlobalSpeedLimit(6_000_000) // pieces of 1.5 MB: every segment takes several requests
+
+        let id = try await manager.add(env.newDownload(server.url(), segments: 4))
+        let done = await waitForCompletion(manager, id)
+        #expect(done.state == .completed)
+        #expect(try sha256Hex(of: env.file("file.bin")) == sha256Hex(of: resource), "requesting pieces must not change the result")
+    }
+
+    /// The other tests only prove a limit is not exceeded. This one proves it is reached: with eight connections
+    /// sharing the limit, the sustained rate (measured after the buffered head start) must be close to it, not a
+    /// fraction of it. The speed modes (1 and 4 MB/s) rely on that.
+    @Test(arguments: [1_024_000, 4_096_000] as [Int64])
+    func manyConnectionsSharingALimitSustainRoughlyThatRate(limit: Int64) async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let resource = MockResource(size: 200_000_000)
+        let server = try await MockHTTPServer.start { resource.response(for: $0) }; defer { server.stop() }
+        let manager = env.makeManager()
+        await manager.setGlobalSpeedLimit(limit)
+
+        let id = try await manager.add(env.newDownload(server.url(), segments: 8))
+        // Past the megabytes URLSession and the kernel buffer ahead of the first stall.
+        let start = await waitFor(manager, id, timeout: .seconds(60), "past the head start") { $0.receivedBytes >= 16_000_000 }
+        let clock = ContinuousClock()
+        let t0 = clock.now
+        let target = start.receivedBytes + limit * 4 // about four seconds' worth
+        let end = await waitFor(manager, id, timeout: .seconds(60), "four seconds' worth") { $0.receivedBytes >= target }
+        let elapsed = clock.now - t0
+        await manager.remove(id, deleteFiles: true)
+
+        let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+        let rate = Double(end.receivedBytes - start.receivedBytes) / seconds
+        #expect(rate > Double(limit) * 0.8, "limit \(limit) B/s, sustained \(Int(rate)) B/s")
+        #expect(rate < Double(limit) * 1.25, "limit \(limit) B/s, sustained \(Int(rate)) B/s")
+    }
+
     @Test func aLimitCanBeChangedWhileDownloading() async throws {
         let env = try TestEnvironment(); defer { env.cleanup() }
         let resource = MockResource(size: 12_000_000)

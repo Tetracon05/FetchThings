@@ -24,7 +24,7 @@ struct KeychainSecretStore: SecretStore {
         item[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlock
         let status = SecItemAdd(item as CFDictionary, nil)
         guard status == errSecSuccess else {
-            throw DownloadError.fileSystem("Could not save credentials to the keychain (status \(status)).")
+            throw DownloadError.fileSystem(String(localized: "Could not save credentials to the keychain (status \(status))."))
         }
     }
 

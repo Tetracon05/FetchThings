@@ -14,6 +14,13 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .accessibilityLabel("Filters")
+        // The speed mode lives at the foot of the sidebar, out of the way of the list.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SpeedModePicker(model: model)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+        }
     }
 
     private var selection: Binding<SidebarItem?> {
@@ -25,6 +32,6 @@ struct SidebarView: View {
         return Label(item.title, systemImage: item.symbol)
             .badge(count)
             .tag(item)
-            .accessibilityValue(count == 1 ? "1 download" : "\(count) downloads")
+            .accessibilityValue(String(localized: "\(count) downloads"))
     }
 }

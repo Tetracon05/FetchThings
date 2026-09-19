@@ -1,28 +1,61 @@
 import DownloadKit
 import SwiftUI
 
+/// Widths that must add up: the widest the sidebar can get, the narrowest table, and the details pane with its
+/// margins have to fit in `minWindowWidth` together, or the split view overflows the window (see CLAUDE.md).
+enum MainWindowLayout {
+    static let sidebarMinWidth: CGFloat = 190
+    static let sidebarMaxWidth: CGFloat = 250
+    static let tableMinWidth: CGFloat = 320
+    static let paneWidth: CGFloat = 272
+    /// The gap around the floating glass pane, on each side.
+    static let paneInset: CGFloat = 8
+    static let minWindowWidth: CGFloat = 860
+    static let minWindowHeight: CGFloat = 460
+}
+
 struct MainView: View {
     @Bindable var model: AppModel
+    @FocusState private var tableFocused: Bool
+    /// The toolbar search field's width (see `SearchFieldLayout`). Only the resulting width is kept, not the width of the
+    /// area it is worked out from: the toolbar was laid out wrongly (the field partly outside the window) when this was
+    /// updated at launch with a value that came out the same.
+    @State private var searchFieldWidth = SearchFieldLayout.widest
 
     var body: some View {
         NavigationSplitView {
             SidebarView(model: model)
-                .navigationSplitViewColumnWidth(min: 190, ideal: 215, max: 280)
+                .navigationSplitViewColumnWidth(min: MainWindowLayout.sidebarMinWidth, ideal: 210, max: MainWindowLayout.sidebarMaxWidth)
         } detail: {
-            DownloadTable(model: model)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if let links = model.clipboardOffer {
-                        ClipboardBanner(links: links, add: model.acceptClipboardOffer, dismiss: model.dismissClipboardOffer)
+            // A fixed-width pane in a plain HStack: every pane has a size that cannot conflict with the window's
+            // minimum. (`.inspector` looped the layout at minimum width, and `HSplitView` centred the table
+            // vertically and overflowed the window when the pane opened.)
+            HStack(spacing: 0) {
+                DownloadTable(model: model)
+                    .focused($tableFocused)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if let links = model.clipboardOffer {
+                            ClipboardBanner(links: links, add: model.acceptClipboardOffer, dismiss: model.dismissClipboardOffer)
+                        }
                     }
-                }
-                .inspector(isPresented: $model.showInspector) {
+                    .frame(minWidth: MainWindowLayout.tableMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+                    // A click in the table must take keyboard focus from the search field, or Delete and the arrow
+                    // keys keep going to the field after the user has searched. (The click still selects the row.)
+                    .simultaneousGesture(TapGesture().onEnded { tableFocused = true })
+                if model.showInspector {
+                    // A floating glass card beside the table rather than a flat column with a divider.
                     InspectorView(model: model)
-                        .inspectorColumnWidth(min: 260, ideal: 300, max: 440)
+                        .frame(width: MainWindowLayout.paneWidth)
+                        .frame(maxHeight: .infinity)
+                        .glassSurface(.rect(cornerRadius: 22))
+                        .padding(MainWindowLayout.paneInset)
                 }
+            }
+            .onGeometryChange(for: CGFloat.self) { SearchFieldLayout.width(detailAreaWidth: $0.size.width) } action: { searchFieldWidth = $0 }
         }
         .navigationTitle(model.sidebarSelection.title)
         .navigationSubtitle(subtitle)
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search downloads")
+        .onChange(of: model.selection) { QuickLookController.shared.selectionChanged(in: model) }
         .toolbar { toolbar }
         .sheet(isPresented: $model.showAddSheet, onDismiss: model.resetDraft) { AddDownloadSheet(model: model) }
         .confirmationDialog(
@@ -47,14 +80,7 @@ struct MainView: View {
         }
         // Links, text files and text can be dropped or pasted anywhere in the window. They only propose
         // downloads: the Add sheet opens filled in, and nothing starts until the user confirms.
-        .dropDestination(for: URL.self) { urls, _ in
-            model.handleIncoming(urls: urls)
-            return true
-        }
-        .dropDestination(for: String.self) { strings, _ in
-            model.handleText(strings.joined(separator: "\n"))
-            return true
-        }
+        .onDrop(of: [.url, .plainText], delegate: IncomingDropDelegate(model: model))
         .pasteDestination(for: String.self) { strings in
             model.handleText(strings.joined(separator: "\n"))
         }
@@ -62,14 +88,14 @@ struct MainView: View {
 
     private var subtitle: String {
         let running = model.runningCount
-        var parts = ["\(model.visibleDownloads.count) \(model.visibleDownloads.count == 1 ? "download" : "downloads")"]
-        if running > 0 { parts.append("\(Formatters.speed(model.totalBytesPerSecond)) · \(running) active") }
+        var parts = [String(localized: "\(model.visibleDownloads.count) downloads")]
+        if running > 0 { parts.append(String(localized: "\(Formatters.speed(model.totalBytesPerSecond)) · \(running) active")) }
         return parts.joined(separator: " · ")
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarItemGroup(placement: .navigation) {
             Button { model.presentAddSheet() } label: {
                 Label("Add Download", systemImage: "plus")
             }
@@ -99,11 +125,34 @@ struct MainView: View {
             .disabled(model.selectedDownloads.isEmpty)
             .help("Remove from the list (Delete). Finished files are kept; partly downloaded data is deleted after you confirm.")
 
-            Toggle(isOn: $model.showInspector) {
-                Label("Inspector", systemImage: "sidebar.trailing")
+            // A Button, not a Toggle: a toolbar Toggle reaches VoiceOver without any label.
+            Button { model.showInspector.toggle() } label: {
+                Label("Details", systemImage: "sidebar.trailing")
+                    .symbolVariant(model.showInspector ? .fill : .none)
             }
-            .help("Show or hide the inspector")
+            .accessibilityValue(model.showInspector ? "Shown" : "Hidden")
+            .help("Show or hide the details pane")
         }
+        searchItem
+    }
+
+    /// As wide as the details card below it, so the field does not straddle the edge between table and card. It has its
+    /// own glass (see `ToolbarSearchField`); by default the toolbar would merge it into the buttons' capsule.
+    @ToolbarContentBuilder
+    private var searchItem: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .primaryAction) { searchField }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .primaryAction) { searchField }
+        }
+    }
+
+    private var searchField: some View {
+        ToolbarSearchField(
+            text: $model.searchText, focusRequested: $model.isSearchFocused,
+            width: searchFieldWidth
+        ) { tableFocused = true }
     }
 }
 
@@ -114,27 +163,30 @@ struct ClipboardBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "link")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            IconChip(symbol: "link", tint: .accentColor, size: 24)
             Text(message)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
             Button("Add…", action: add)
+                .glassButton(prominent: true)
             Button("Dismiss", action: dismiss)
+                .glassButton()
         }
+        .controlSize(.small)
+        .padding(.leading, 8)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
+        .glassSurface(.capsule)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .contain)
     }
 
     private var message: String {
         guard let first = links.first else { return "" }
         return links.count == 1
-            ? "Link on the clipboard: \(first.absoluteString)"
-            : "\(links.count) links on the clipboard, starting with \(first.absoluteString)"
+            ? String(localized: "Link on the clipboard: \(first.absoluteString)")
+            : String(localized: "\(links.count) links on the clipboard, starting with \(first.absoluteString)")
     }
 }

@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add to Downloader" : {
+      "comment" : "The item in the Services menu that sends selected text to Downloader as links to add.",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Downloader"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloader’a Ekle"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

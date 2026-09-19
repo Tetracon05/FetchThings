@@ -9,7 +9,7 @@ struct DownloaderApp: App {
         // A single window: opening a link or file with the app must not spawn another one.
         Window("Downloads", id: MainWindow.sceneID) {
             MainView(model: model)
-                .frame(minWidth: 860, minHeight: 460)
+                .frame(minWidth: MainWindowLayout.minWindowWidth, minHeight: MainWindowLayout.minWindowHeight)
         }
         .defaultSize(width: 1100, height: 640)
         .commands { DownloadCommands(model: model) }

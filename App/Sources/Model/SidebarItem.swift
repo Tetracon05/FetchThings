@@ -11,10 +11,10 @@ enum SidebarItem: Hashable, Identifiable {
 
     var title: String {
         switch self {
-        case .all: "All Downloads"
-        case .active: "Active"
-        case .completed: "Completed"
-        case .failed: "Failed"
+        case .all: String(localized: "All Downloads")
+        case .active: String(localized: "Active")
+        case .completed: String(localized: "Completed")
+        case .failed: String(localized: "Failed")
         case .category(let category): category.title
         }
     }

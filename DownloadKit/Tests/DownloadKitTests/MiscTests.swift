@@ -160,6 +160,41 @@ struct StorageTests {
         #expect(try await store.loadAll().count == 1)
     }
 
+    @Test func fileStoreKeepsFractionsOfASecondSoABatchKeepsItsOrder() async throws {
+        let env = try TestEnvironment()
+        defer { env.cleanup() }
+        let store = FileJobStore(directory: env.jobs)
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var records: [DownloadRecord] = []
+        for index in 0..<3 {
+            var record = DownloadRecord(url: URL(string: "https://example.com/\(index)")!, destinationDirectory: env.downloads)
+            record.createdAt = base.addingTimeInterval(Double(index) * 0.004)
+            records.append(record)
+            try await store.save(record)
+        }
+        let loaded = try await store.loadAll().sorted { $0.createdAt < $1.createdAt }
+        #expect(loaded.map(\.id) == records.map(\.id), "added a few milliseconds apart, they must still be told apart")
+        for (saved, original) in zip(loaded, records) {
+            #expect(abs(saved.createdAt.timeIntervalSince(original.createdAt)) < 0.0015, "millisecond precision is what the format keeps")
+        }
+    }
+
+    @Test func fileStoreStillReadsJobFilesWrittenWithWholeSeconds() async throws {
+        let env = try TestEnvironment()
+        defer { env.cleanup() }
+        var record = DownloadRecord(url: URL(string: "https://example.com/old")!, destinationDirectory: env.downloads)
+        record.createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        // The format the app wrote before fractional seconds were kept.
+        let legacy = JSONEncoder()
+        legacy.dateEncodingStrategy = .iso8601
+        try FileManager.default.createDirectory(at: env.jobs, withIntermediateDirectories: true)
+        try legacy.encode(record).write(to: env.jobs.appending(path: "\(record.id.uuidString).json"))
+
+        let loaded = try #require(try await FileJobStore(directory: env.jobs).loadAll().first)
+        #expect(loaded.id == record.id)
+        #expect(loaded.createdAt == record.createdAt)
+    }
+
     @Test func fileStoreIsPrivateAndSkipsCorruptFiles() async throws {
         let env = try TestEnvironment()
         defer { env.cleanup() }

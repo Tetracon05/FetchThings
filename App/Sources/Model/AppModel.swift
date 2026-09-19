@@ -28,7 +28,9 @@ final class AppModel {
     /// Always a subset of `visibleDownloads`: a row that is filtered out is deselected, so no action can
     /// reach a download the user cannot see.
     var selection: Set<DownloadID> = []
-    var showInspector = true
+    var showInspector = false
+    /// A one-shot request to focus the search field in the toolbar (⌘F); the main view acts on it and resets it.
+    var isSearchFocused = false
 
     var showAddSheet = false
     var draft: AddDraft
@@ -89,7 +91,7 @@ final class AppModel {
     var isStarted: Bool { !tasks.isEmpty }
 
     private func reportRestoreFailure(_ error: any Error) {
-        alert = AlertMessage(title: "Couldn’t Restore Downloads", message: error.localizedDescription)
+        alert = AlertMessage(title: String(localized: "Couldn’t Restore Downloads"), message: error.localizedDescription)
     }
 
     /// Stops following the engine and stops running transfers, keeping their progress.
@@ -101,7 +103,16 @@ final class AppModel {
 
     func applyEngineSettings() async {
         await engine.setMaxConcurrentDownloads(settings.maxConcurrentDownloads)
-        await engine.setGlobalSpeedLimit(settings.globalSpeedLimit)
+        let limit = settings.globalSpeedLimit
+        log.info("Speed mode \(self.settings.speedMode.rawValue, privacy: .public): limit \(limit.map { "\($0) B/s" } ?? "none", privacy: .public)")
+        await engine.setGlobalSpeedLimit(limit)
+    }
+
+    /// Switches every download to the speed of `mode` (the bar at the bottom of the window, the menu).
+    func selectSpeedMode(_ mode: SpeedMode) {
+        guard settings.speedMode != mode else { return }
+        settings.speedMode = mode
+        Task { await applyEngineSettings() }
     }
 
     // MARK: Events
@@ -204,7 +215,9 @@ final class AppModel {
         let targets = ordered(ids)
         guard !targets.isEmpty else { return }
         let partial = targets.filter { $0.state != .completed && $0.receivedBytes > 0 }
-        if partial.isEmpty {
+        // Asking is for what cannot be undone: partly downloaded data, and a whole batch of entries at once
+        // (Select All, then Delete, would otherwise empty the list in one keystroke).
+        if partial.isEmpty && targets.count == 1 {
             performRemoval(of: targets, trashFiles: trashFiles)
         } else {
             pendingRemoval = PendingRemoval(ids: Set(targets.map(\.id)), trashFiles: trashFiles, partialCount: partial.count, totalCount: targets.count)
@@ -228,7 +241,7 @@ final class AppModel {
                     } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
                         // Already gone: nothing to trash, the entry can still go.
                     } catch {
-                        alert = AlertMessage(title: "Couldn’t Move “\(target.displayName)” to the Trash", message: error.localizedDescription)
+                        alert = AlertMessage(title: String(localized: "Couldn’t Move “\(target.displayName)” to the Trash"), message: error.localizedDescription)
                         continue
                     }
                 }
@@ -258,6 +271,58 @@ final class AppModel {
     func open(_ download: DownloadSnapshot) {
         guard download.state == .completed, let url = download.finalURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: Files
+
+    /// The finished file of a download, when it is (still) there. Only a real file can be dragged out or previewed: a
+    /// running download has just a `.part` file, and a finished one may have been moved or deleted since.
+    func availableFile(of download: DownloadSnapshot) -> URL? {
+        guard download.state == .completed, let url = download.finalURL, FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return url
+    }
+
+    /// What dragging a row out of the list hands to Finder or any other app, or nil when there is no file to hand over.
+    /// It is the file's address (`NSItemProvider(contentsOf:)` would instead promise the file's contents and make the
+    /// receiver read a copy). Whichever is used, SwiftUI clones the file into `~/Library/Caches/com.apple.SwiftUI.Drag-*`
+    /// for the receiver to read: instant and free on APFS, but the clone is left behind afterwards.
+    func dragProvider(for download: DownloadSnapshot) -> NSItemProvider? {
+        availableFile(of: download).map { url in
+            let provider = NSItemProvider(object: url as NSURL)
+            // Only this process sees the mark, so the window can refuse the drag when it is dropped back on it.
+            provider.registerDataRepresentation(forTypeIdentifier: OwnDrag.identifier, visibility: .ownProcess) { completion in
+                completion(Data(), nil)
+                return nil
+            }
+            return provider
+        }
+    }
+
+    /// The files to hand over when dragging `downloads` out of the details pane: the finished ones that are still there,
+    /// in the order given.
+    func dragFiles(of downloads: [DownloadSnapshot]) -> [URL] {
+        downloads.compactMap(availableFile(of:))
+    }
+
+    /// What Quick Look shows for the selection: the selected finished files, in on-screen order.
+    var quickLookItems: [QuickLookItem] {
+        selectedDownloads.compactMap { download in
+            availableFile(of: download).map { QuickLookItem(id: download.id, url: $0, title: download.displayName) }
+        }
+    }
+
+    /// Whether the Quick Look command can do anything. Cheap, so a menu can ask on every refresh: it does not look at
+    /// the disk the way `quickLookItems` does.
+    var canQuickLookSelection: Bool { selectedDownloads.contains { $0.state == .completed && $0.finalURL != nil } }
+
+    /// Moves a single selection up or down the list, as the arrow keys do, and stops at either end.
+    func moveSelection(by offset: Int) {
+        guard selection.count == 1, let only = selection.first,
+              let index = visibleDownloads.firstIndex(where: { $0.id == only }) else { return }
+        let target = min(max(index + offset, 0), visibleDownloads.count - 1)
+        selection = [visibleDownloads[target].id]
     }
 
     func copyLinks(_ ids: Set<DownloadID>) {
@@ -311,9 +376,9 @@ final class AppModel {
             log.info("Received \(urls.count, privacy: .public) item(s) from the system, \(resolution.links.count, privacy: .public) link(s) found")
             if !resolution.links.isEmpty { presentAddSheet(links: resolution.links) }
             if let problem = resolution.problems.first {
-                alert = AlertMessage(title: resolution.links.isEmpty ? "No Links Found" : "Some Items Were Skipped", message: problem)
+                alert = AlertMessage(title: resolution.links.isEmpty ? String(localized: "No Links Found") : String(localized: "Some Items Were Skipped"), message: problem)
             } else if resolution.links.isEmpty {
-                alert = AlertMessage(title: "No Links Found", message: "There were no http or https links in what you opened or dropped.")
+                alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "There were no http or https links in what you opened or dropped."))
             }
         }
     }
@@ -322,7 +387,7 @@ final class AppModel {
     func handleText(_ text: String) {
         let links = LinkParser.urls(in: text)
         if links.isEmpty {
-            alert = AlertMessage(title: "No Links Found", message: "The text doesn’t contain an http or https link.")
+            alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "The text doesn’t contain an http or https link."))
         } else {
             presentAddSheet(links: links)
         }
@@ -332,7 +397,7 @@ final class AppModel {
         Task {
             let links = await pasteboard.links()
             if links.isEmpty {
-                alert = AlertMessage(title: "No Links on the Clipboard", message: "Copy an http or https link first.")
+                alert = AlertMessage(title: String(localized: "No Links on the Clipboard"), message: String(localized: "Copy an http or https link first."))
             } else {
                 presentAddSheet(links: links)
             }
@@ -360,4 +425,11 @@ final class AppModel {
     func dismissClipboardOffer() {
         clipboardOffer = nil
     }
+}
+
+/// A finished file that Quick Look can show.
+struct QuickLookItem: Equatable {
+    let id: DownloadID
+    let url: URL
+    let title: String
 }

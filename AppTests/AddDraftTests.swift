@@ -126,4 +126,46 @@ struct AddDraftTests {
             #expect(await manager.snapshot(id)?.state == .paused)
         }
     }
+
+    // MARK: List editing from the sheet
+
+    @Test func appendingAddsNewLinksAfterWhatIsThereAndSkipsRepeats() {
+        var d = draft("https://example.com/a.zip")
+        d.append([URL(string: "https://example.com/b.zip")!, URL(string: "https://example.com/a.zip")!, URL(string: "https://example.com/b.zip")!])
+        #expect(d.links.map(\.absoluteString) == ["https://example.com/a.zip", "https://example.com/b.zip"])
+        #expect(d.linksText == "https://example.com/a.zip\nhttps://example.com/b.zip")
+
+        var empty = draft("")
+        empty.append([URL(string: "https://example.com/c.zip")!])
+        #expect(empty.linksText == "https://example.com/c.zip") // no blank line first
+
+        var trailing = draft("https://example.com/a.zip\n")
+        trailing.append([URL(string: "https://example.com/d.zip")!])
+        #expect(trailing.linksText == "https://example.com/a.zip\nhttps://example.com/d.zip") // no blank line between
+    }
+
+    @Test func removingOneLinkKeepsTheOthersInOrder() {
+        var d = draft("https://example.com/a.zip\nhttps://example.com/b.zip\nhttps://example.com/c.zip")
+        d.remove(URL(string: "https://example.com/b.zip")!)
+        #expect(d.links.map(\.absoluteString) == ["https://example.com/a.zip", "https://example.com/c.zip"])
+        d.remove(URL(string: "https://example.com/a.zip")!)
+        d.remove(URL(string: "https://example.com/c.zip")!)
+        #expect(d.links.isEmpty && d.linksText.isEmpty)
+    }
+
+    @Test func aLinkIsSummarisedByItsFileAndHostNeverItsPassword() throws {
+        let file = LinkSummary(URL(string: "https://files.example.com/some%20folder/My%20Movie.mkv")!)
+        #expect(file.displayName == "My Movie.mkv" && file.host == "files.example.com" && file.isEncrypted)
+
+        let plain = LinkSummary(URL(string: "http://example.com/a.zip")!)
+        #expect(!plain.isEncrypted)
+
+        // No file in the path: the host stands in for its name.
+        #expect(LinkSummary(URL(string: "https://example.com/")!).displayName == "example.com")
+        #expect(LinkSummary(URL(string: "https://example.com")!).displayName == "example.com")
+
+        let secret = LinkSummary(URL(string: "https://alice:hunter2@example.com/private.iso")!)
+        #expect(secret.host == "example.com")
+        #expect(!secret.displayName.contains("hunter2") && !secret.host.contains("hunter2") && !secret.host.contains("alice"))
+    }
 }

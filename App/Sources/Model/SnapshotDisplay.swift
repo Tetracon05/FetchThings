@@ -17,13 +17,13 @@ extension DownloadSnapshot {
 
     var statusText: String {
         switch state {
-        case .queued: "Queued"
-        case .probing: "Connecting…"
-        case .downloading: "Downloading"
-        case .paused: "Paused"
-        case .verifying: "Verifying…"
-        case .completed: "Completed"
-        case .failed: "Failed"
+        case .queued: String(localized: "Queued")
+        case .probing: String(localized: "Connecting…")
+        case .downloading: String(localized: "Downloading")
+        case .paused: String(localized: "Paused")
+        case .verifying: String(localized: "Verifying…")
+        case .completed: String(localized: "Completed")
+        case .failed: String(localized: "Failed")
         }
     }
 
@@ -37,7 +37,8 @@ extension DownloadSnapshot {
 /// Display strings. `FormatStyle`s are used throughout because they are value types and thread-safe.
 enum Formatters {
     static func bytes(_ count: Int64) -> String {
-        count.formatted(.byteCount(style: .file))
+        // `spellsOutZero: false`: the default prints "Zero kB".
+        count.formatted(.byteCount(style: .file, spellsOutZero: false))
     }
 
     static func size(_ count: Int64?) -> String {
@@ -45,14 +46,14 @@ enum Formatters {
     }
 
     static func speed(_ bytesPerSecond: Double) -> String {
-        bytesPerSecond >= 1 ? "\(bytes(Int64(bytesPerSecond)))/s" : "—"
+        bytesPerSecond >= 1 ? String(localized: "\(bytes(Int64(bytesPerSecond)))/s") : "—"
     }
 
     static func eta(_ seconds: TimeInterval?) -> String {
         guard let seconds, seconds.isFinite, seconds >= 0 else { return "—" }
-        if seconds < 1 { return "< 1 sec" }
+        if seconds < 1 { return String(localized: "< 1 sec") }
         let whole = Int(seconds.rounded())
-        return Duration.seconds(whole).formatted(.units(allowed: [.days, .hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 2))
+        return Duration.seconds(whole).formatted(.units(allowed: [.days, .hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2))
     }
 
     static func percent(_ fraction: Double?) -> String {

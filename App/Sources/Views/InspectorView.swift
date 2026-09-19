@@ -8,15 +8,35 @@ struct InspectorView: View {
         if let download = model.inspectedDownload {
             DetailForm(download: download, model: model)
         } else if model.selection.count > 1 {
-            let selected = model.selectedDownloads
-            let total = selected.compactMap(\.totalBytes).reduce(0, +)
-            ContentUnavailableView(
-                "\(selected.count) Downloads Selected", systemImage: "square.stack",
-                description: Text(total > 0 ? "\(Formatters.bytes(total)) in total" : "")
-            )
+            MultipleSelection(downloads: model.selectedDownloads, model: model)
         } else {
             ContentUnavailableView("No Selection", systemImage: "info.circle", description: Text("Select a download to see its details."))
         }
+    }
+}
+
+/// Several downloads selected: their pictures piled up, and how many and how big they are together.
+private struct MultipleSelection: View {
+    let downloads: [DownloadSnapshot]
+    let model: AppModel
+
+    var body: some View {
+        let total = downloads.compactMap(\.totalBytes).reduce(0, +)
+        VStack(spacing: 6) {
+            DownloadStack(downloads: downloads)
+                // Drag the pile to take every selected file along.
+                .overlay { FileDragSource { FileDragSource.items(for: downloads, in: model, box: DownloadStack.cardBox) } }
+                .padding(.bottom, 14)
+            Text("\(downloads.count) Downloads Selected")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+            if total > 0 {
+                Text("\(Formatters.bytes(total)) in total")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -25,65 +45,122 @@ private struct DetailForm: View {
     let model: AppModel
 
     var body: some View {
-        Form {
-            Section("General") {
-                LabeledContent("Name") { Text(download.displayName).textSelection(.enabled) }
-                LabeledContent("Address") {
-                    Text(download.url.absoluteString)
-                        .textSelection(.enabled)
-                        .lineLimit(4)
-                        .truncationMode(.middle)
-                }
-                LabeledContent("Saved In") {
-                    Button {
-                        model.revealInFinder([download.id])
-                    } label: {
-                        Text(download.destinationDirectory.displayPath)
-                            .lineLimit(2)
+        ScrollView {
+            VStack(spacing: 14) {
+                header
+                InsetGroup(title: Text("General")) {
+                    DetailRow(title: Text("Address"), stacked: true) {
+                        Text(download.url.absoluteString)
+                            .textSelection(.enabled)
+                            .lineLimit(4)
                             .truncationMode(.middle)
                     }
-                    .buttonStyle(.link)
-                    .help("Show in Finder")
+                    DetailRow(title: Text("Saved In"), stacked: true) {
+                        Button {
+                            model.revealInFinder([download.id])
+                        } label: {
+                            Text(download.destinationDirectory.displayPath)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                        }
+                        .buttonStyle(.link)
+                        .help("Show in Finder")
+                    }
+                    if let failure = download.failure {
+                        DetailRow(title: Text("Error"), stacked: true) {
+                            Text(failure)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
-                LabeledContent("Status") {
-                    Text(download.statusText).foregroundStyle(download.state == .failed ? Color.red : Color.primary)
+
+                InsetGroup(title: Text("Transfer")) {
+                    DetailRow(Text("Size"), value: Formatters.size(download.totalBytes))
+                    DetailRow(Text("Downloaded"), value: Formatters.bytes(download.receivedBytes))
+                    DetailRow(Text("Speed"), value: Formatters.speed(download.bytesPerSecond))
+                    DetailRow(Text("Time Left"), value: Formatters.eta(download.eta))
+                    DetailRow(Text("Connections"), value: download.state == .downloading ? "\(download.activeConnections)" : "—")
+                    if download.state != .completed {
+                        DetailRow(Text("Can Resume"), value: download.mode == nil ? "—" : (download.supportsResume ? String(localized: "Yes") : String(localized: "No")))
+                    }
                 }
-                if let failure = download.failure {
-                    Text(failure)
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
+
+                if !download.segments.isEmpty, let total = download.totalBytes, total > 0 {
+                    InsetGroup(title: Text("Connections")) {
+                        SegmentMap(segments: download.segments, total: total)
+                            .padding(8)
+                    }
+                }
+
+                InsetGroup(title: Text("Details")) {
+                    DetailRow(Text("Added"), value: download.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    if let completed = download.completedAt {
+                        DetailRow(Text("Completed"), value: completed.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    if let verified = download.checksumVerified {
+                        DetailRow(Text("Checksum"), value: verified ? String(localized: "Verified") : String(localized: "Not verified"))
+                    }
+                    if let limit = download.speedLimit {
+                        DetailRow(Text("Speed Limit"), value: String(localized: "\(Formatters.bytes(limit))/s"))
+                    }
                 }
             }
+            .padding(10)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
 
-            Section("Transfer") {
-                LabeledContent("Size", value: Formatters.size(download.totalBytes))
-                LabeledContent("Downloaded", value: Formatters.bytes(download.receivedBytes))
-                LabeledContent("Speed", value: Formatters.speed(download.bytesPerSecond))
-                LabeledContent("Time Left", value: Formatters.eta(download.eta))
-                LabeledContent("Connections", value: download.state == .downloading ? "\(download.activeConnections)" : "—")
-                LabeledContent("Can Resume", value: download.mode == nil ? "—" : (download.supportsResume ? "Yes" : "No"))
+    /// The file's picture, its name, where it stands and, while it is not finished, a progress bar.
+    private var header: some View {
+        VStack(spacing: 10) {
+            // A preview of the contents once the file is there (a video frame, a photo), its icon before that.
+            DownloadPicture(download: download, box: DownloadPicture.headerBox, iconSide: 112)
+                // Drag the picture to take the file along.
+                .overlay { FileDragSource { FileDragSource.items(for: [download], in: model, box: DownloadPicture.headerBox) } }
+            VStack(spacing: 6) {
+                Text(download.displayName)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                Text(download.statusText)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .glassSurface(.capsule, tint: download.stateTint.opacity(0.3))
             }
-
-            if !download.segments.isEmpty, let total = download.totalBytes, total > 0 {
-                Section("Connections") {
-                    SegmentMap(segments: download.segments, total: total)
+            if download.state != .completed {
+                VStack(spacing: 6) {
+                    if let fraction = download.fraction {
+                        ProgressBar(fraction: fraction, tint: download.stateTint, selected: false)
+                    } else if download.state.isRunning {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(progressLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
-            }
-
-            Section("Details") {
-                LabeledContent("Added", value: download.createdAt.formatted(date: .abbreviated, time: .shortened))
-                if let completed = download.completedAt {
-                    LabeledContent("Completed", value: completed.formatted(date: .abbreviated, time: .shortened))
-                }
-                if let verified = download.checksumVerified {
-                    LabeledContent("Checksum", value: verified ? "Verified" : "Not verified")
-                }
-                if let limit = download.speedLimit {
-                    LabeledContent("Speed Limit", value: "\(Formatters.bytes(limit))/s")
-                }
+                .padding(.horizontal, 6)
             }
         }
-        .formStyle(.grouped)
+        .padding(.top, 6)
+    }
+
+    private var progressLine: String {
+        var parts: [String] = []
+        if let total = download.totalBytes, total > 0 {
+            parts.append(String(localized: "\(Formatters.bytes(download.receivedBytes)) of \(Formatters.size(total))"))
+        } else {
+            parts.append(Formatters.bytes(download.receivedBytes))
+        }
+        if download.state == .downloading {
+            if download.bytesPerSecond >= 1 { parts.append(Formatters.speed(download.bytesPerSecond)) }
+            if let eta = download.eta { parts.append(Formatters.eta(eta)) }
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -107,8 +184,10 @@ private struct SegmentMap: View {
                 context.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .style(.background))
             }
         }
-        .frame(height: 16)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .frame(height: 14)
+        .clipShape(Capsule())
+        .padding(4)
+        .glassSurface(.capsule)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Connection map")
         .accessibilityValue("\(segments.count) parts, \(Formatters.percent(Double(segments.reduce(0) { $0 + $1.received }) / Double(total))) fetched")
