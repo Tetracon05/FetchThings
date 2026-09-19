@@ -1,7 +1,7 @@
 import DownloadKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 @Suite("Add sheet draft")
 struct AddDraftTests {

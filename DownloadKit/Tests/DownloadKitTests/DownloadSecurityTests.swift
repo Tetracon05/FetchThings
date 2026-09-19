@@ -264,7 +264,7 @@ struct DownloadSecurityTests {
 
         let properties = try env.file("file.bin").resourceValues(forKeys: [.quarantinePropertiesKey]).quarantineProperties
         #expect(properties?["LSQuarantineType"] as? String == "LSQuarantineTypeWebDownload")
-        #expect(properties?["LSQuarantineAgentName"] as? String == "Downloader")
+        #expect(properties?["LSQuarantineAgentName"] as? String == "FetchThings")
     }
 
     @Test func quarantineCanBeDisabled() async throws {

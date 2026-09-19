@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct DownloaderApp: App {
+struct FetchThingsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let model = AppModel.shared
 

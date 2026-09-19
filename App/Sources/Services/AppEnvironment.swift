@@ -11,14 +11,14 @@ enum AppEnvironment {
             || NSClassFromString("XCTestCase") != nil
     }
 
-    /// For driving the app by hand or by script: `DOWNLOADER_SANDBOX=<folder>` keeps the job list, downloaded files,
+    /// For driving the app by hand or by script: `FETCHTHINGS_SANDBOX=<folder>` keeps the job list, downloaded files,
     /// secrets and settings away from the real ones (jobs in `<folder>/Jobs`, files in `<folder>/Downloads`).
     static var sandboxDirectory: URL? {
-        ProcessInfo.processInfo.environment["DOWNLOADER_SANDBOX"].map { URL(filePath: $0, directoryHint: .isDirectory) }
+        ProcessInfo.processInfo.environment["FETCHTHINGS_SANDBOX"].map { URL(filePath: $0, directoryHint: .isDirectory) }
     }
 
     static func makeModel() -> AppModel {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.example.Downloader"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.example.FetchThings"
         let defaults: UserDefaults
         let jobsDirectory: URL
         let secrets: any SecretStore
@@ -34,7 +34,7 @@ enum AppEnvironment {
             secrets = InMemorySecretStore()
         } else if isRunningTests {
             defaults = UserDefaults(suiteName: "\(bundleID).tests.\(ProcessInfo.processInfo.processIdentifier)") ?? .standard
-            jobsDirectory = URL(filePath: NSTemporaryDirectory()).appending(path: "DownloaderTestHost-\(ProcessInfo.processInfo.processIdentifier)/Jobs")
+            jobsDirectory = URL(filePath: NSTemporaryDirectory()).appending(path: "FetchThingsTestHost-\(ProcessInfo.processInfo.processIdentifier)/Jobs")
             secrets = InMemorySecretStore()
         } else {
             defaults = .standard

@@ -2,7 +2,7 @@ import AppKit
 import DownloadKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 /// One test per defect found in the Phase 2 code review.
 @MainActor
@@ -172,7 +172,7 @@ struct Phase2ReviewTests {
     }
 
     @Test func hugeStoredOrTypedLimitsDoNotCrashSettingsOrTheDraft() {
-        let suite = "DownloaderTests.huge.\(UUID().uuidString)"
+        let suite = "FetchThingsTests.huge.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.set(Int.max, forKey: "lowLimitKBps") // as if a huge number had been persisted
         defaults.set("low", forKey: "speedMode")

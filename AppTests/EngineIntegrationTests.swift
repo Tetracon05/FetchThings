@@ -2,7 +2,7 @@ import CryptoKit
 import DownloadKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 /// The model wired to the real engine (no fake), downloading from a local server.
 @MainActor
@@ -23,7 +23,7 @@ struct EngineIntegrationTests {
         configuration.progressInterval = .milliseconds(50)
         configuration.checkpointInterval = .milliseconds(150)
         let manager = DownloadManager(configuration: configuration, store: FileJobStore(directory: root.appending(path: "Jobs")), secrets: InMemorySecretStore())
-        let suite = "DownloaderTests.rig.\(UUID().uuidString)"
+        let suite = "FetchThingsTests.rig.\(UUID().uuidString)"
         let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
         settings.downloadFolder = folder
         return Rig(model: AppModel(engine: manager, settings: settings, pasteboard: FakePasteboard()), manager: manager, folder: folder, root: root)

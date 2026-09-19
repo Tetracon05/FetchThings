@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Downloader</string>
+	<string>FetchThings</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -47,7 +47,7 @@
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>downloader</string>
+				<string>fetchthings</string>
 			</array>
 		</dict>
 	</array>
@@ -70,12 +70,12 @@
 			<key>NSMenuItem</key>
 			<dict>
 				<key>default</key>
-				<string>Add to Downloader</string>
+				<string>Add to FetchThings</string>
 			</dict>
 			<key>NSMessage</key>
 			<string>addDownloads</string>
 			<key>NSPortName</key>
-			<string>Downloader</string>
+			<string>FetchThings</string>
 			<key>NSSendTypes</key>
 			<array>
 				<string>NSStringPboardType</string>

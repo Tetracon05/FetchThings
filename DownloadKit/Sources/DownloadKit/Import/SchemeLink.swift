@@ -1,11 +1,11 @@
 import Foundation
 
-/// The app's own URL scheme: `downloader://add?url=<link>&url=<link>`.
+/// The app's own URL scheme: `fetchthings://add?url=<link>&url=<link>`.
 ///
 /// Opening such a link must only ever *propose* downloads (the app shows them in the Add sheet for the
 /// user to confirm). Any web page can produce a link like this, so it must never start a transfer.
 public enum SchemeLink {
-    public static let scheme = "downloader"
+    public static let scheme = "fetchthings"
 
     /// The links carried by an `add` action, or `nil` if `link` is not one. Only `http(s)` URLs survive,
     /// in order, without duplicates and capped at `LinkParser.maxLinks`.

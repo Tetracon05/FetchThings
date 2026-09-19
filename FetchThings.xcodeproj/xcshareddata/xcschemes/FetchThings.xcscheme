@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "BCC7867334AA56081D4F8DDD"
-               BuildableName = "Downloader.app"
-               BlueprintName = "Downloader"
-               ReferencedContainer = "container:Downloader.xcodeproj">
+               BlueprintIdentifier = "2B7603681967FEC3B9BE2A96"
+               BuildableName = "FetchThings.app"
+               BlueprintName = "FetchThings"
+               ReferencedContainer = "container:FetchThings.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BCC7867334AA56081D4F8DDD"
-            BuildableName = "Downloader.app"
-            BlueprintName = "Downloader"
-            ReferencedContainer = "container:Downloader.xcodeproj">
+            BlueprintIdentifier = "2B7603681967FEC3B9BE2A96"
+            BuildableName = "FetchThings.app"
+            BlueprintName = "FetchThings"
+            ReferencedContainer = "container:FetchThings.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -44,10 +44,10 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "353E3ABB27E4FA511BB0A249"
-               BuildableName = "DownloaderTests.xctest"
-               BlueprintName = "DownloaderTests"
-               ReferencedContainer = "container:Downloader.xcodeproj">
+               BlueprintIdentifier = "3822BEBE5A16B4EF4BE26EF5"
+               BuildableName = "FetchThingsTests.xctest"
+               BlueprintName = "FetchThingsTests"
+               ReferencedContainer = "container:FetchThings.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -68,10 +68,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BCC7867334AA56081D4F8DDD"
-            BuildableName = "Downloader.app"
-            BlueprintName = "Downloader"
-            ReferencedContainer = "container:Downloader.xcodeproj">
+            BlueprintIdentifier = "2B7603681967FEC3B9BE2A96"
+            BuildableName = "FetchThings.app"
+            BlueprintName = "FetchThings"
+            ReferencedContainer = "container:FetchThings.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -87,10 +87,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BCC7867334AA56081D4F8DDD"
-            BuildableName = "Downloader.app"
-            BlueprintName = "Downloader"
-            ReferencedContainer = "container:Downloader.xcodeproj">
+            BlueprintIdentifier = "2B7603681967FEC3B9BE2A96"
+            BuildableName = "FetchThings.app"
+            BlueprintName = "FetchThings"
+            ReferencedContainer = "container:FetchThings.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

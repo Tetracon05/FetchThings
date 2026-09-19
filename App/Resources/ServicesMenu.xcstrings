@@ -1,20 +1,20 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Add to Downloader" : {
-      "comment" : "The item in the Services menu that sends selected text to Downloader as links to add.",
+    "Add to FetchThings" : {
+      "comment" : "The item in the Services menu that sends selected text to FetchThings as links to add.",
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add to Downloader"
+            "value" : "Add to FetchThings"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Downloader’a Ekle"
+            "value" : "FetchThings’e Ekle"
           }
         }
       }

@@ -1,12 +1,12 @@
 import DownloadKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 @Suite("Keychain secret store", .serialized)
 struct KeychainSecretStoreTests {
     private func makeStore() -> KeychainSecretStore {
-        KeychainSecretStore(service: "com.example.DownloaderTests.\(UUID().uuidString)")
+        KeychainSecretStore(service: "com.example.FetchThingsTests.\(UUID().uuidString)")
     }
 
     private let secrets = SensitiveOptions(

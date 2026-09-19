@@ -1,7 +1,7 @@
 import DownloadKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 @Suite("File categories")
 struct FileCategoryTests {
@@ -119,7 +119,7 @@ struct FormattingTests {
 @Suite("Settings")
 struct SettingsTests {
     private func defaults() -> UserDefaults {
-        let suite = "DownloaderTests.settings.\(UUID().uuidString)"
+        let suite = "FetchThingsTests.settings.\(UUID().uuidString)"
         let d = UserDefaults(suiteName: suite)!
         d.removePersistentDomain(forName: suite)
         return d

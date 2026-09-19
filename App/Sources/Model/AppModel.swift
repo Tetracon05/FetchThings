@@ -5,7 +5,7 @@ import Observation
 import OSLog
 import UniformTypeIdentifiers
 
-private let log = Logger(subsystem: "com.example.Downloader", category: "model")
+private let log = Logger(subsystem: "com.example.FetchThings", category: "model")
 
 /// Everything the window shows, and every action it can take. The engine's events are batched, so the
 /// views are refreshed a few times a second instead of on every progress tick.
@@ -368,7 +368,7 @@ final class AppModel {
         draft = AddDraft(folder: settings.downloadFolder, segmentCount: settings.segmentCount, userAgent: settings.defaultUserAgent)
     }
 
-    /// Anything the system hands the app: `downloader://` links, dropped or opened text files, and
+    /// Anything the system hands the app: `fetchthings://` links, dropped or opened text files, and
     /// plain web links. All of it only *proposes* downloads in the Add sheet.
     func handleIncoming(urls: [URL]) {
         Task {

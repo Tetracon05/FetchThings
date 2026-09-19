@@ -2,7 +2,7 @@ import DownloadKit
 import Foundation
 import UniformTypeIdentifiers
 
-/// Turns what the system hands the app (`downloader://` links, dropped or opened text files, plain web
+/// Turns what the system hands the app (`fetchthings://` links, dropped or opened text files, plain web
 /// links) into download links. Nothing here adds a download.
 enum IncomingLinks {
     /// What was found, plus a message for each item that could not be read.

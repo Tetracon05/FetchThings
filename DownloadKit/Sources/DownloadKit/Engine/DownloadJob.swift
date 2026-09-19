@@ -332,7 +332,7 @@ actor DownloadJob {
         let finalName = try DestinationResolver.moveIntoPlace(partURL, directory: directory, name: name)
         let finalURL = try DestinationResolver.childURL(in: directory, named: finalName)
         if env.configuration.applyQuarantine {
-            DestinationResolver.applyQuarantine(to: finalURL, origin: record.url, agent: "Downloader")
+            DestinationResolver.applyQuarantine(to: finalURL, origin: record.url, agent: "FetchThings")
         }
         let size = DestinationResolver.fileSize(of: finalURL)
         record.filename = finalName

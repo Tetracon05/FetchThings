@@ -2,7 +2,7 @@ import DownloadKit
 import Foundation
 import Testing
 import UniformTypeIdentifiers
-@testable import Downloader
+@testable import FetchThings
 
 @MainActor
 @Suite("AppModel", .serialized)
@@ -393,7 +393,7 @@ struct AppModelTests {
     }
 
     @Test func onlyWebLinksSurviveFromAnyInputEvenALinkThatSmugglesOthers() async {
-        let hostile = URL(string: "downloader://add?url=file%3A%2F%2F%2Fetc%2Fpasswd&url=ftp%3A%2F%2Fx.example%2Fa&url=javascript%3Aalert(1)&url=https%3A%2F%2Fok.example%2Fa.zip")!
+        let hostile = URL(string: "fetchthings://add?url=file%3A%2F%2F%2Fetc%2Fpasswd&url=ftp%3A%2F%2Fx.example%2Fa&url=javascript%3Aalert(1)&url=https%3A%2F%2Fok.example%2Fa.zip")!
         let links = await IncomingLinks.resolve([hostile, URL(string: "file:///etc/hosts")!, URL(string: "ftp://x.example/a")!, URL(string: "data:text/plain,hi")!]).links
         #expect(links.map(\.absoluteString) == ["https://ok.example/a.zip"])
     }
@@ -445,7 +445,7 @@ struct AppModelTests {
         await ctx.model.checkClipboard()
         #expect(ctx.model.clipboardOffer == nil, "not while another app is in front")
 
-        // Copy a link in another app, then switch to Downloader: that is exactly when to offer it.
+        // Copy a link in another app, then switch to FetchThings: that is exactly when to offer it.
         ctx.model.isAppActive = { true }
         await ctx.model.checkClipboard()
         #expect(ctx.model.clipboardOffer?.map(\.lastPathComponent) == ["a.zip"])

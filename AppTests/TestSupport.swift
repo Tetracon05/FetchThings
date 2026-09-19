@@ -1,6 +1,6 @@
 import DownloadKit
 import Foundation
-@testable import Downloader
+@testable import FetchThings
 
 /// An in-memory engine: records what the model asks for and lets a test push events.
 actor FakeEngine: DownloadEngine {
@@ -90,7 +90,7 @@ func makeModel(
     pasteboard: FakePasteboard = FakePasteboard(),
     configure: (AppSettings) -> Void = { _ in }
 ) -> (model: AppModel, engine: FakeEngine, pasteboard: FakePasteboard, settings: AppSettings) {
-    let suite = "DownloaderTests.\(UUID().uuidString)"
+    let suite = "FetchThingsTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     let settings = AppSettings(defaults: defaults)

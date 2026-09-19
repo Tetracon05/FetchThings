@@ -46,7 +46,7 @@ private struct GeneralSettings: View {
             }
             TileSection(
                 title: Text("Clipboard"),
-                footer: Text("Off by default. When on, Downloader offers to add web links you copy while it is the frontmost app. It never adds them by itself.")
+                footer: Text("Off by default. When on, FetchThings offers to add web links you copy while it is the frontmost app. It never adds them by itself.")
             ) {
                 SettingTile(symbol: "doc.on.clipboard.fill", tint: .orange, title: Text("Look for links on the clipboard")) {
                     Toggle("Look for links on the clipboard", isOn: $settings.detectClipboard)

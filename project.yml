@@ -1,4 +1,4 @@
-name: Downloader
+name: FetchThings
 
 options:
   bundleIdPrefix: com.example
@@ -30,7 +30,7 @@ settings:
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 
 targets:
-  Downloader:
+  FetchThings:
     type: application
     platform: macOS
     sources:
@@ -42,7 +42,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Downloader
+        CFBundleDisplayName: FetchThings
         CFBundleDevelopmentRegion: en
         # The app's languages; add a language here and translate it in the String Catalogs.
         CFBundleLocalizations: [en, tr]
@@ -55,53 +55,53 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleTypeRole: Viewer
-            CFBundleURLSchemes: [downloader]
+            CFBundleURLSchemes: [fetchthings]
         # Lets text files of links be dropped on the Dock icon or opened with the app.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Text Document
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.plain-text]
-        # "Add to Downloader" in the Services menu: macOS cannot deliver text dropped on a Dock icon.
+        # "Add to FetchThings" in the Services menu: macOS cannot deliver text dropped on a Dock icon.
         NSServices:
           - NSMenuItem:
-              default: Add to Downloader
+              default: Add to FetchThings
             NSMessage: addDownloads
-            NSPortName: Downloader
+            NSPortName: FetchThings
             NSSendTypes: [NSStringPboardType, public.utf8-plain-text]
     entitlements:
-      path: App/Downloader.entitlements
+      path: App/FetchThings.entitlements
       properties:
         com.apple.security.app-sandbox: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.Downloader
-        PRODUCT_NAME: Downloader
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.FetchThings
+        PRODUCT_NAME: FetchThings
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
 
-  DownloaderTests:
+  FetchThingsTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: AppTests
     dependencies:
-      - target: Downloader
+      - target: FetchThings
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.DownloaderTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.FetchThingsTests
         GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: "$(TEST_HOST)"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Downloader.app/Contents/MacOS/Downloader"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/FetchThings.app/Contents/MacOS/FetchThings"
 
 schemes:
-  Downloader:
+  FetchThings:
     build:
       targets:
-        Downloader: all
+        FetchThings: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - DownloaderTests
+        - FetchThingsTests

@@ -1211,12 +1211,12 @@
         }
       }
     },
-    "Off by default. When on, Downloader offers to add web links you copy while it is the frontmost app. It never adds them by itself." : {
+    "Off by default. When on, FetchThings offers to add web links you copy while it is the frontmost app. It never adds them by itself." : {
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Varsayılan olarak kapalıdır. Açıkken, Downloader ön plandaki uygulama olduğunda kopyaladığınız web bağlantılarını eklemeyi önerir. Bunları asla kendiliğinden eklemez."
+            "value" : "Varsayılan olarak kapalıdır. Açıkken, FetchThings ön plandaki uygulama olduğunda kopyaladığınız web bağlantılarını eklemeyi önerir. Bunları asla kendiliğinden eklemez."
           }
         }
       }

@@ -156,7 +156,7 @@ struct RequestSecurityTests {
     }
 
     @Test func quarantineRecordsTheOriginWithoutItsCredentials() {
-        let properties = DestinationResolver.quarantineProperties(origin: URL(string: "https://ann:hunter2@example.com/a/b.zip?x=1")!, agent: "Downloader")
+        let properties = DestinationResolver.quarantineProperties(origin: URL(string: "https://ann:hunter2@example.com/a/b.zip?x=1")!, agent: "FetchThings")
         let recorded = properties["LSQuarantineDataURL"] as? String
         #expect(recorded == "https://example.com/a/b.zip?x=1")
         #expect(properties["LSQuarantineType"] as? String == "LSQuarantineTypeWebDownload")

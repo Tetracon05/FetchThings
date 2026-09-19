@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-@testable import Downloader
+@testable import FetchThings
 
 @Suite("File previews")
 @MainActor

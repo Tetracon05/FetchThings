@@ -10,13 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         // Not tied to the window: downloads resume and are observed even if the window never appears.
         // UI testing only (sandbox mode): force an appearance without touching system settings.
-        if AppEnvironment.sandboxDirectory != nil, let name = ProcessInfo.processInfo.environment["DOWNLOADER_APPEARANCE"] {
+        if AppEnvironment.sandboxDirectory != nil, let name = ProcessInfo.processInfo.environment["FETCHTHINGS_APPEARANCE"] {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
         }
         AppModel.shared.start()
     }
 
-    /// Links and text files dropped on the Dock icon, files opened with the app, and `downloader://` links.
+    /// Links and text files dropped on the Dock icon, files opened with the app, and `fetchthings://` links.
     func application(_ application: NSApplication, open urls: [URL]) {
         AppModel.shared.handleIncoming(urls: urls)
         MainWindow.showIfHidden() // the Add sheet lives in the window, so a closed window would swallow it
@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// belongs to that window.
 @MainActor
 enum MainWindow {
-    /// The scene id in `DownloaderApp`; SwiftUI uses it as the window's identifier. (Looking the window up by
+    /// The scene id in `FetchThingsApp`; SwiftUI uses it as the window's identifier. (Looking the window up by
     /// `canBecomeMain` would miss it exactly when it is hidden, because SwiftUI reports false then.)
     static let sceneID = "main"
 
@@ -91,7 +91,7 @@ final class TerminationGate {
     }
 }
 
-/// The "Add to Downloader" item in the Services menu: selected text with links in it goes to the Add sheet.
+/// The "Add to FetchThings" item in the Services menu: selected text with links in it goes to the Add sheet.
 /// (macOS cannot deliver text dropped on a Dock icon, so this is the way to send text to the app.)
 @MainActor
 final class ServicesProvider: NSObject {
