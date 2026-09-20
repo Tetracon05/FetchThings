@@ -30,10 +30,10 @@ struct TestEnvironment: Sendable {
         return configuration
     }
 
-    func makeManager(_ customize: (inout EngineConfiguration) -> Void = { _ in }) -> DownloadManager {
+    func makeManager(network: (any NetworkMonitoring)? = nil, _ customize: (inout EngineConfiguration) -> Void = { _ in }) -> DownloadManager {
         var configuration = Self.fastConfiguration()
         customize(&configuration)
-        return DownloadManager(configuration: configuration, store: FileJobStore(directory: jobs), secrets: secrets)
+        return DownloadManager(configuration: configuration, store: FileJobStore(directory: jobs), secrets: secrets, network: network)
     }
 
     func newDownload(_ url: URL, segments: Int? = nil, customize: (inout NewDownload) -> Void = { _ in }) -> NewDownload {

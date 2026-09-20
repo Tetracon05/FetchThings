@@ -319,6 +319,49 @@ struct AppModelTests {
         await ctx.model.shutdown()
     }
 
+    // MARK: The network
+
+    @Test func theModelFollowsTheNetworkAndQueuedDownloadsSayWhyTheyWait() async {
+        let ctx = makeModel()
+        let queued = snapshot("a.zip", state: .queued), running = snapshot("b.zip", state: .downloading)
+        #expect(await started(2, [queued, running], ctx))
+        #expect(ctx.model.networkBanner == nil && ctx.model.statusText(of: queued) == queued.statusText, "nothing waits for the network yet")
+
+        await ctx.engine.sendNetwork(NetworkState(status: .offline, block: .offline))
+        #expect(await eventually { ctx.model.network.block == .offline })
+        #expect(ctx.model.networkBanner == .offline)
+        #expect(ctx.model.statusText(of: queued) == String(localized: "Waiting for network"))
+        #expect(ctx.model.statusText(of: running) == running.statusText, "only a download that waits says so")
+
+        await ctx.engine.sendNetwork(.unrestricted)
+        #expect(await eventually { ctx.model.network.block == nil })
+        #expect(ctx.model.networkBanner == nil && ctx.model.statusText(of: queued) == queued.statusText)
+        await ctx.model.shutdown()
+    }
+
+    @Test func theBannerIsOnlyShownWhileSomethingWaitsForTheConnection() async {
+        let ctx = makeModel()
+        #expect(await started(1, [snapshot("b.zip", state: .downloading)], ctx))
+        await ctx.engine.sendNetwork(NetworkState(status: .offline, block: .offline))
+        #expect(await eventually { ctx.model.network.block == .offline })
+        #expect(ctx.model.networkBanner == nil, "an offline Mac with nothing queued has nothing to report")
+        await ctx.model.shutdown()
+    }
+
+    @Test func downloadAnywayTellsTheEngine() async {
+        let ctx = makeModel()
+        ctx.model.downloadAnyway()
+        #expect(await eventually { await ctx.engine.networkOverrides == 1 })
+    }
+
+    @Test func theNetworkPolicyReachesTheEngineBeforeAnythingIsLoaded() async {
+        let ctx = makeModel { $0.pauseOnExpensiveNetwork = true; $0.pauseOnConstrainedNetwork = false }
+        #expect(await started(0, [], ctx))
+        #expect(await ctx.engine.policySetBeforeLoad, "restored downloads start the moment they are loaded")
+        #expect(await ctx.engine.networkPolicies.first == NetworkPolicy(pauseOnExpensive: true, pauseOnConstrained: false))
+        await ctx.model.shutdown()
+    }
+
     @Test func everyFilterHasItsOwnWholeSentenceForWhenItIsEmpty() {
         let messages = SidebarItem.downloadItems.map(\.emptyMessage) + SidebarItem.categoryItems.map(\.emptyMessage)
         #expect(Set(messages).count == messages.count && !messages.contains(""))

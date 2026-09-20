@@ -168,6 +168,19 @@ struct SettingsTests {
         #expect(s.speedMode == .high, "an unknown stored mode falls back to the default")
     }
 
+    @Test func theNetworkChoicesDefaultToRespectingLowDataModeAndUsingAHotspot() {
+        let d = defaults()
+        let s = AppSettings(defaults: d)
+        #expect(!s.pauseOnExpensiveNetwork && s.pauseOnConstrainedNetwork)
+        #expect(s.networkPolicy == NetworkPolicy(pauseOnExpensive: false, pauseOnConstrained: true))
+
+        s.pauseOnExpensiveNetwork = true
+        s.pauseOnConstrainedNetwork = false
+        let again = AppSettings(defaults: d)
+        #expect(again.pauseOnExpensiveNetwork && !again.pauseOnConstrainedNetwork, "and they are remembered")
+        #expect(again.networkPolicy == NetworkPolicy(pauseOnExpensive: true, pauseOnConstrained: false))
+    }
+
     @Test func numbersKeepThemselvesInRangeWhoeverWritesThem() {
         let s = AppSettings(defaults: defaults())
         s.lowLimitKBps = 0

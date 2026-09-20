@@ -129,7 +129,7 @@ private struct DetailForm: View {
                     .lineLimit(3)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
-                Text(download.statusText)
+                Text(model.statusText(of: download))
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)

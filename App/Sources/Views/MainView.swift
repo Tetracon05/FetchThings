@@ -34,8 +34,13 @@ struct MainView: View {
                 DownloadTable(model: model)
                     .focused($tableFocused)
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        if let links = model.clipboardOffer {
-                            ClipboardBanner(links: links, add: model.acceptClipboardOffer, dismiss: model.dismissClipboardOffer)
+                        VStack(spacing: 0) {
+                            if let block = model.networkBanner {
+                                NetworkBanner(block: block, downloadAnyway: model.downloadAnyway)
+                            }
+                            if let links = model.clipboardOffer {
+                                ClipboardBanner(links: links, add: model.acceptClipboardOffer, dismiss: model.dismissClipboardOffer)
+                            }
                         }
                     }
                     .frame(minWidth: MainWindowLayout.tableMinWidth, maxWidth: .infinity, maxHeight: .infinity)
@@ -152,22 +157,22 @@ struct MainView: View {
     }
 }
 
-struct ClipboardBanner: View {
-    let links: [URL]
-    let add: () -> Void
-    let dismiss: () -> Void
+/// A slim glass bar under the toolbar: an icon disc, a message, and buttons for what the user can do about it.
+struct BannerBar<Actions: View>: View {
+    let symbol: String
+    let tint: Color
+    let message: String
+    var lines = 1
+    @ViewBuilder var actions: Actions
 
     var body: some View {
         HStack(spacing: 10) {
-            IconChip(symbol: "link", tint: .accentColor, size: 24)
+            IconChip(symbol: symbol, tint: tint, size: 24)
             Text(message)
-                .lineLimit(1)
+                .lineLimit(lines)
                 .truncationMode(.middle)
             Spacer()
-            Button("Add…", action: add)
-                .glassButton(prominent: true)
-            Button("Dismiss", action: dismiss)
-                .glassButton()
+            actions
         }
         .controlSize(.small)
         .padding(.horizontal, 8)
@@ -177,11 +182,58 @@ struct ClipboardBanner: View {
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
     }
+}
+
+struct ClipboardBanner: View {
+    let links: [URL]
+    let add: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        BannerBar(symbol: "link", tint: .accentColor, message: message) {
+            Button("Add…", action: add)
+                .glassButton(prominent: true)
+            Button("Dismiss", action: dismiss)
+                .glassButton()
+        }
+    }
 
     private var message: String {
         guard let first = links.first else { return "" }
         return links.count == 1
             ? String(localized: "Link on the clipboard: \(first.absoluteString)")
             : String(localized: "\(links.count) links on the clipboard, starting with \(first.absoluteString)")
+    }
+}
+
+/// Says that downloads are waiting for the connection, and why. Offline there is nothing to do; on a connection the
+/// user asked to keep downloads off, they can go ahead anyway.
+struct NetworkBanner: View {
+    let block: NetworkBlock
+    let downloadAnyway: () -> Void
+
+    var body: some View {
+        BannerBar(symbol: symbol, tint: .orange, message: message, lines: 2) {
+            if block != .offline {
+                Button("Download Anyway", action: downloadAnyway)
+                    .glassButton(prominent: true)
+            }
+        }
+    }
+
+    private var symbol: String {
+        switch block {
+        case .offline: "wifi.slash"
+        case .expensive: "personalhotspot"
+        case .constrained: "leaf.fill"
+        }
+    }
+
+    private var message: String {
+        switch block {
+        case .offline: String(localized: "You’re offline. Downloads wait here and continue when the connection is back.")
+        case .expensive: String(localized: "This connection may be metered (a Personal Hotspot or cellular). Downloads are waiting.")
+        case .constrained: String(localized: "Low Data Mode is on for this network. Downloads are waiting.")
+        }
     }
 }

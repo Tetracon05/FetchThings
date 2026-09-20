@@ -52,7 +52,18 @@ enum AppEnvironment {
         }
 
         let settings = AppSettings(defaults: defaults)
-        let manager = DownloadManager(store: FileJobStore(directory: jobsDirectory), secrets: secrets)
+        let manager = DownloadManager(store: FileJobStore(directory: jobsDirectory), secrets: secrets, network: networkMonitor())
         return AppModel(engine: manager, settings: settings)
+    }
+
+    /// The system's network, except under unit tests (nothing is held back) and, for a UI test in sandbox mode,
+    /// `FETCHTHINGS_NETWORK_FILE=<file>`: the network is what the file says (`offline`, `expensive`, `constrained`;
+    /// anything else is online), so a screenshot run can change it without touching the Mac's real connection.
+    private static func networkMonitor() -> (any NetworkMonitoring)? {
+        if isRunningTests { return nil }
+        if sandboxDirectory != nil, let path = ProcessInfo.processInfo.environment["FETCHTHINGS_NETWORK_FILE"] {
+            return FileNetworkMonitor(file: URL(filePath: path))
+        }
+        return SystemNetworkMonitor()
     }
 }

@@ -555,6 +555,16 @@
         }
       }
     },
+    "Connection" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bağlantı"
+          }
+        }
+      }
+    },
     "Connection map" : {
       "localizations" : {
         "tr" : {
@@ -725,6 +735,16 @@
         }
       }
     },
+    "Download Anyway" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yine de İndir"
+          }
+        }
+      }
+    },
     "Download folder" : {
       "localizations" : {
         "tr" : {
@@ -771,6 +791,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aynı anda indirme"
+          }
+        }
+      }
+    },
+    "Downloads wait on a network that is in Low Data Mode." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Düşük Veri Modu açık bir ağda indirmeler bekler."
+          }
+        }
+      }
+    },
+    "Downloads wait unless you choose Download Anyway." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Yine de İndir”i seçmezseniz indirmeler bekler."
           }
         }
       }
@@ -1045,6 +1085,16 @@
         }
       }
     },
+    "Low Data Mode is on for this network. Downloads are waiting." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu ağda Düşük Veri Modu açık. İndirmeler bekliyor."
+          }
+        }
+      }
+    },
     "Low speed: %@ for all downloads together" : {
       "localizations" : {
         "tr" : {
@@ -1311,6 +1361,16 @@
         }
       }
     },
+    "Pause on a Personal Hotspot or cellular" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kişisel Erişim Noktası veya hücresel bağlantıda duraklat"
+          }
+        }
+      }
+    },
     "Pause the selected downloads (⌥⌘P)" : {
       "localizations" : {
         "tr" : {
@@ -1467,6 +1527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "İstekler"
+          }
+        }
+      }
+    },
+    "Respect Low Data Mode" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Düşük Veri Modu’na uy"
           }
         }
       }
@@ -1871,6 +1941,16 @@
         }
       }
     },
+    "This connection may be metered (a Personal Hotspot or cellular). Downloads are waiting." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bağlantı ücretli olabilir (Kişisel Erişim Noktası veya hücresel). İndirmeler bekliyor."
+          }
+        }
+      }
+    },
     "Time Left" : {
       "localizations" : {
         "tr" : {
@@ -1961,6 +2041,16 @@
         }
       }
     },
+    "Waiting for network" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ağ bekleniyor"
+          }
+        }
+      }
+    },
     "Waits until you start it" : {
       "localizations" : {
         "tr" : {
@@ -1971,12 +2061,32 @@
         }
       }
     },
+    "When the Mac is offline, downloads wait and continue by themselves." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac çevrimdışıyken indirmeler bekler ve kendiliğinden devam eder."
+          }
+        }
+      }
+    },
     "Yes" : {
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Evet"
+          }
+        }
+      }
+    },
+    "You’re offline. Downloads wait here and continue when the connection is back." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Çevrimdışısınız. İndirmeler burada bekler ve bağlantı geri geldiğinde devam eder."
           }
         }
       }
