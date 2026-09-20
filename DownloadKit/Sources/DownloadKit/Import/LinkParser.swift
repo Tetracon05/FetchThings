@@ -10,6 +10,21 @@ public enum LinkParserError: LocalizedError, Equatable {
     }
 }
 
+/// An `NSDataDetector` made on first use: building one costs about as much as scanning a short line, and text that
+/// is one link per line (or empty, as the Add sheet's field usually is) never needs it.
+private struct LazyDetector {
+    private var built = false
+    private var detector: NSDataDetector?
+
+    mutating func get() -> NSDataDetector? {
+        if !built {
+            built = true
+            detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        }
+        return detector
+    }
+}
+
 /// Finds downloadable links in pasted text or a `.txt` file.
 public enum LinkParser {
     public static let maxLinks = 10_000
@@ -23,12 +38,12 @@ public enum LinkParser {
     public static func urls(in text: String) -> [URL] {
         var seen = Set<String>()
         var result: [URL] = []
-        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        var detector = LazyDetector() // most text is one link per line, which never needs it
 
         for line in text.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { continue }
-            for url in candidates(in: trimmed, detector: detector) where seen.insert(url.absoluteString).inserted {
+            for url in candidates(in: trimmed, detector: &detector) where seen.insert(url.absoluteString).inserted {
                 result.append(url)
                 if result.count >= maxLinks { return result }
             }
@@ -44,14 +59,14 @@ public enum LinkParser {
         return urls(in: String(decoding: data, as: UTF8.self))
     }
 
-    private static func candidates(in line: String, detector: NSDataDetector?) -> [URL] {
+    private static func candidates(in line: String, detector: inout LazyDetector) -> [URL] {
         // Common case: the whole line is one URL.
         if !line.contains(where: \.isWhitespace), let url = downloadable(line) { return [url] }
         if line.utf8.count > maxDetectorLineLength { return tokenized(line) }
 
-        guard let detector else { return [] }
+        guard let found = detector.get() else { return [] }
         let range = NSRange(line.startIndex..., in: line)
-        return detector.matches(in: line, options: [], range: range).compactMap { match in
+        return found.matches(in: line, options: [], range: range).compactMap { match in
             guard let matched = Range(match.range, in: line) else { return nil }
             return downloadable(String(line[matched]))
         }

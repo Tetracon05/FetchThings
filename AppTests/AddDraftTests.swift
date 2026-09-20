@@ -7,7 +7,7 @@ import Testing
 struct AddDraftTests {
     private func draft(_ text: String = "https://example.com/a.zip") -> AddDraft {
         var d = AddDraft(folder: URL(filePath: "/tmp/dl", directoryHint: .isDirectory), segmentCount: 6)
-        d.linksText = text
+        d.append(LinkParser.urls(in: text))
         return d
     }
 
@@ -105,7 +105,8 @@ struct AddDraftTests {
         #expect(!d.sendsCredentialsOverPlainHTTP)
         d.username = "ann"
         #expect(d.sendsCredentialsOverPlainHTTP)
-        d.linksText = "https://example.com/a"
+        d = draft("https://example.com/a")
+        d.username = "ann"
         #expect(!d.sendsCredentialsOverPlainHTTP)
     }
 
@@ -134,15 +135,30 @@ struct AddDraftTests {
         var d = draft("https://example.com/a.zip")
         d.append([URL(string: "https://example.com/b.zip")!, URL(string: "https://example.com/a.zip")!, URL(string: "https://example.com/b.zip")!])
         #expect(d.links.map(\.absoluteString) == ["https://example.com/a.zip", "https://example.com/b.zip"])
-        #expect(d.linksText == "https://example.com/a.zip\nhttps://example.com/b.zip")
 
         var empty = draft("")
         empty.append([URL(string: "https://example.com/c.zip")!])
-        #expect(empty.linksText == "https://example.com/c.zip") // no blank line first
+        #expect(empty.links.map(\.absoluteString) == ["https://example.com/c.zip"])
+    }
 
-        var trailing = draft("https://example.com/a.zip\n")
-        trailing.append([URL(string: "https://example.com/d.zip")!])
-        #expect(trailing.linksText == "https://example.com/a.zip\nhttps://example.com/d.zip") // no blank line between
+    @Test func onlyHTTPLinksAreKeptAndAtMostTheParsersLimit() {
+        var d = draft("")
+        d.append([URL(string: "ftp://example.com/x")!, URL(string: "file:///etc/passwd")!, URL(string: "https://example.com/ok")!])
+        #expect(d.links.map(\.absoluteString) == ["https://example.com/ok"], "the list can only hold what the parser would have accepted")
+
+        var many = draft("")
+        many.append((0...LinkParser.maxLinks).map { URL(string: "https://example.com/\($0)")! })
+        #expect(many.links.count == LinkParser.maxLinks)
+        many.append([URL(string: "https://example.com/one-more")!])
+        #expect(many.links.count == LinkParser.maxLinks, "a full list takes nothing more")
+    }
+
+    @Test func keepingOnlyWhatFailedDropsTheRestAndTheirMarks() {
+        var d = draft("https://example.com/a.zip\nhttps://example.com/b.zip")
+        d.append([URL(string: "https://outside.example/c.zip")!], fromOutside: true)
+        d.keepOnly([URL(string: "https://example.com/b.zip")!])
+        #expect(d.links.map(\.absoluteString) == ["https://example.com/b.zip"])
+        #expect(d.linksWithoutSecrets.isEmpty, "a mark never outlives its link")
     }
 
     @Test func removingOneLinkKeepsTheOthersInOrder() {
@@ -151,7 +167,7 @@ struct AddDraftTests {
         #expect(d.links.map(\.absoluteString) == ["https://example.com/a.zip", "https://example.com/c.zip"])
         d.remove(URL(string: "https://example.com/a.zip")!)
         d.remove(URL(string: "https://example.com/c.zip")!)
-        #expect(d.links.isEmpty && d.linksText.isEmpty)
+        #expect(d.links.isEmpty)
     }
 
     @Test func aLinkIsSummarisedByItsFileAndHostNeverItsPassword() throws {

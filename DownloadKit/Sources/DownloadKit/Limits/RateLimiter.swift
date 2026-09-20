@@ -14,8 +14,6 @@ public protocol RateLimiting: Sendable {
 }
 
 extension RateLimiting {
-    public var maxRequestBytes: Int? { nil }
-
     /// Waits until nothing is owed. The debt is read again every `step` seconds instead of being slept out in one go,
     /// so a limit that is raised or removed while a connection waits (a change of speed mode) is noticed within a
     /// step rather than after the whole old debt.

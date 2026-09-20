@@ -9,8 +9,8 @@ public actor DownloadManager {
     private let globalLimiter = RateLimiter()
 
     private var jobs: [DownloadID: DownloadJob] = [:]
+    /// The latest snapshot of every download; its `sequence` is the order they were added in.
     private var snapshots: [DownloadID: DownloadSnapshot] = [:]
-    private var sequences: [DownloadID: Int] = [:]
     /// Jobs handed a slot and not yet back in a resting state. Counted synchronously so concurrent
     /// scheduling passes cannot overshoot the limit.
     private var runningIDs: Set<DownloadID> = []
@@ -44,7 +44,6 @@ public actor DownloadManager {
             }
             let job = DownloadJob(record: record, env: makeEnvironment())
             jobs[record.id] = job
-            sequences[record.id] = record.sequence
             snapshots[record.id] = await job.snapshot()
             broadcast(.snapshot(snapshots[record.id]!))
         }
@@ -96,7 +95,6 @@ public actor DownloadManager {
 
         let job = DownloadJob(record: record, env: makeEnvironment())
         jobs[record.id] = job
-        sequences[record.id] = record.sequence
         let snapshot = await job.snapshot()
         snapshots[record.id] = snapshot
         broadcast(.snapshot(snapshot))
@@ -111,7 +109,6 @@ public actor DownloadManager {
         await job.stop(to: .paused)
         jobs[id] = nil
         snapshots[id] = nil
-        sequences[id] = nil
         runningIDs.remove(id)
         releaseReservation(id)
         await job.removeArtifacts(deleteFinalFile: deleteFiles)
@@ -137,7 +134,7 @@ public actor DownloadManager {
     }
 
     public func pauseAll() async {
-        for id in snapshots.keys.sorted(by: { (sequences[$0] ?? 0) < (sequences[$1] ?? 0) }) {
+        for id in allSnapshots().map(\.id) {
             await pause(id)
         }
     }
@@ -168,7 +165,7 @@ public actor DownloadManager {
     public func snapshot(_ id: DownloadID) -> DownloadSnapshot? { snapshots[id] }
 
     public func allSnapshots() -> [DownloadSnapshot] {
-        snapshots.values.sorted { (sequences[$0.id] ?? 0) < (sequences[$1.id] ?? 0) }
+        snapshots.values.sorted { $0.sequence < $1.sequence }
     }
 
     /// A stream of changes. It starts with the current state of every download, then follows updates
@@ -241,7 +238,7 @@ public actor DownloadManager {
         while !isShutDown, runningIDs.count < configuration.maxConcurrentDownloads {
             let candidate = snapshots.values
                 .filter { $0.state == .queued && !runningIDs.contains($0.id) }
-                .min { (sequences[$0.id] ?? 0) < (sequences[$1.id] ?? 0) }
+                .min { $0.sequence < $1.sequence }
             guard let candidate, let job = jobs[candidate.id] else { break }
             runningIDs.insert(candidate.id)
             if await !job.start() {

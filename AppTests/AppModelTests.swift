@@ -214,9 +214,12 @@ struct AppModelTests {
         let gone = snapshot("gone.png", state: .completed, finalURL: dir.appendingPathComponent("gone.png"))
         #expect(await started(4, [a, b, running, gone], ctx))
 
-        #expect(ctx.model.dragFiles(of: [b, running, gone, a]) == [dir.appendingPathComponent("b.png"), dir.appendingPathComponent("a.png")])
-        #expect(ctx.model.dragFiles(of: [running, gone]).isEmpty)
-        #expect(ctx.model.dragFiles(of: []).isEmpty)
+        // What a drag out of the details pane carries: the finished files that are still there, in the order given.
+        let box = CGSize(width: 10, height: 10)
+        func dragged(_ downloads: [DownloadSnapshot]) -> [URL] { FileDragSource.items(for: downloads, in: ctx.model, box: box).map(\.url) }
+        #expect(dragged([b, running, gone, a]) == [dir.appendingPathComponent("b.png"), dir.appendingPathComponent("a.png")])
+        #expect(dragged([running, gone]).isEmpty)
+        #expect(dragged([]).isEmpty)
         await ctx.model.shutdown()
     }
 
@@ -383,7 +386,7 @@ struct AppModelTests {
         ctx.model.presentAddSheet(links: [URL(string: "https://example.com/a")!])
         #expect(ctx.model.showAddSheet)
         #expect(ctx.model.draft.segmentCount == 12 && ctx.model.draft.folder.path == "/tmp/custom" && ctx.model.draft.userAgent == "Agent/9")
-        #expect(ctx.model.draft.linksText == "https://example.com/a")
+        #expect(ctx.model.draft.links.map(\.absoluteString) == ["https://example.com/a"])
 
         ctx.model.draft.startPaused = true // the user is mid-edit
         ctx.model.presentAddSheet(links: [URL(string: "https://example.com/b")!])
@@ -431,7 +434,7 @@ struct AppModelTests {
         ctx.model.draft.cookies = "secret=1"
         ctx.model.showAddSheet = false
         ctx.model.presentAddSheet()
-        #expect(ctx.model.draft.linksText.isEmpty && ctx.model.draft.cookies.isEmpty, "cookies from a previous add must not carry over")
+        #expect(ctx.model.draft.links.isEmpty && ctx.model.draft.cookies.isEmpty, "cookies from a previous add must not carry over")
     }
 
     // MARK: Incoming links, files and text

@@ -175,9 +175,12 @@ final class AppModel {
     func count(for item: SidebarItem) -> Int { counts[item] ?? 0 }
 
     private func refreshCounts() {
-        var fresh: [SidebarItem: Int] = [:]
-        for item in SidebarItem.downloadItems + SidebarItem.categoryItems {
-            fresh[item] = downloads.values.reduce(0) { $0 + (item.includes($1) ? 1 : 0) }
+        var fresh = Dictionary(uniqueKeysWithValues: (SidebarItem.downloadItems + SidebarItem.categoryItems).map { ($0, 0) })
+        for download in downloads.values {
+            for item in SidebarItem.downloadItems where item.includes(download) { fresh[item, default: 0] += 1 }
+            // A download is in exactly one category; classifying it once (not once per category row) matters when many
+            // downloads still have no file name and it is worked out from the address.
+            fresh[.category(download.category), default: 0] += 1
         }
         if fresh != counts { counts = fresh }
     }
@@ -242,7 +245,7 @@ final class AppModel {
     private func performRemoval(of targets: [DownloadSnapshot], trashFiles: Bool) {
         Task {
             for target in targets {
-                if trashFiles, target.state == .completed, let file = target.finalURL {
+                if trashFiles, let file = target.completedFileURL {
                     do {
                         try trash(file)
                     } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
@@ -276,7 +279,7 @@ final class AppModel {
     }
 
     func open(_ download: DownloadSnapshot) {
-        guard download.state == .completed, let url = download.finalURL else { return }
+        guard let url = download.completedFileURL else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -285,7 +288,7 @@ final class AppModel {
     /// The finished file of a download, when it is (still) there. Only a real file can be dragged out or previewed: a
     /// running download has just a `.part` file, and a finished one may have been moved or deleted since.
     func availableFile(of download: DownloadSnapshot) -> URL? {
-        guard download.state == .completed, let url = download.finalURL, FileManager.default.fileExists(atPath: url.path) else {
+        guard let url = download.completedFileURL, FileManager.default.fileExists(atPath: url.path) else {
             return nil
         }
         return url
@@ -307,12 +310,6 @@ final class AppModel {
         }
     }
 
-    /// The files to hand over when dragging `downloads` out of the details pane: the finished ones that are still there,
-    /// in the order given.
-    func dragFiles(of downloads: [DownloadSnapshot]) -> [URL] {
-        downloads.compactMap(availableFile(of:))
-    }
-
     /// What Quick Look shows for the selection: the selected finished files, in on-screen order.
     var quickLookItems: [QuickLookItem] {
         selectedDownloads.compactMap { download in
@@ -322,7 +319,7 @@ final class AppModel {
 
     /// Whether the Quick Look command can do anything. Cheap, so a menu can ask on every refresh: it does not look at
     /// the disk the way `quickLookItems` does.
-    var canQuickLookSelection: Bool { selectedDownloads.contains { $0.state == .completed && $0.finalURL != nil } }
+    var canQuickLookSelection: Bool { selectedDownloads.contains { $0.completedFileURL != nil } }
 
     /// Makes `ids` the selection unless they are already part of it.
     func selectIfNeeded(_ ids: Set<DownloadID>) {
@@ -331,10 +328,12 @@ final class AppModel {
         selection = ids.intersection(visible)
     }
 
+    /// The row a download has in the list on screen.
+    func row(of id: DownloadID) -> Int? { visibleDownloads.firstIndex { $0.id == id } }
+
     /// Moves a single selection up or down the list, as the arrow keys do, and stops at either end.
     func moveSelection(by offset: Int) {
-        guard selection.count == 1, let only = selection.first,
-              let index = visibleDownloads.firstIndex(where: { $0.id == only }) else { return }
+        guard selection.count == 1, let only = selection.first, let index = row(of: only) else { return }
         let target = min(max(index + offset, 0), visibleDownloads.count - 1)
         selection = [visibleDownloads[target].id]
     }
@@ -380,6 +379,7 @@ final class AppModel {
     /// Forgets everything typed into the Add sheet, passwords and cookies included. Called when the sheet closes,
     /// so secrets do not linger in memory.
     func resetDraft() {
+        sheetNote = nil
         draft = AddDraft(folder: settings.downloadFolder, segmentCount: settings.segmentCount, userAgent: settings.defaultUserAgent)
     }
 

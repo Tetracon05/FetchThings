@@ -10,15 +10,43 @@ final class AppSettings {
     static let concurrencyRange = 1...10
 
     var downloadFolder: URL { didSet { defaults.set(downloadFolder.path, forKey: Key.folder) } }
+    // The numbers below keep themselves in range whoever writes them (a field in Settings, and later a menu bar item or
+    // a schedule): a value out of range is put back before it is stored, so no writer has to remember to clamp. The
+    // put-back is guarded by `!=`: under `@Observable` every assignment, of the same value too, runs `didSet` again, so
+    // an unguarded one recurses without end.
     /// Connections per download for new downloads.
-    var segmentCount: Int { didSet { defaults.set(segmentCount, forKey: Key.segments) } }
-    var maxConcurrentDownloads: Int { didSet { defaults.set(maxConcurrentDownloads, forKey: Key.concurrent) } }
+    var segmentCount: Int {
+        didSet {
+            let kept = Self.segmentRange.clamp(segmentCount)
+            if kept != segmentCount { segmentCount = kept }
+            defaults.set(segmentCount, forKey: Key.segments)
+        }
+    }
+    var maxConcurrentDownloads: Int {
+        didSet {
+            let kept = Self.concurrencyRange.clamp(maxConcurrentDownloads)
+            if kept != maxConcurrentDownloads { maxConcurrentDownloads = kept }
+            defaults.set(maxConcurrentDownloads, forKey: Key.concurrent)
+        }
+    }
     /// The current speed mode: which of the limits below applies to all downloads together.
     var speedMode: SpeedMode { didSet { defaults.set(speedMode.rawValue, forKey: Key.speedMode) } }
     /// Kilobytes per second in Low mode. Never below 1: zero would mean unlimited.
-    var lowLimitKBps: Int { didSet { defaults.set(lowLimitKBps, forKey: Key.lowLimit) } }
-    /// Kilobytes per second in Normal mode.
-    var normalLimitKBps: Int { didSet { defaults.set(normalLimitKBps, forKey: Key.normalLimit) } }
+    var lowLimitKBps: Int {
+        didSet {
+            let kept = Self.limit(lowLimitKBps, default: SpeedMode.defaultLowKBps)
+            if kept != lowLimitKBps { lowLimitKBps = kept }
+            defaults.set(lowLimitKBps, forKey: Key.lowLimit)
+        }
+    }
+    /// Kilobytes per second in Normal mode. Never below 1, for the same reason.
+    var normalLimitKBps: Int {
+        didSet {
+            let kept = Self.limit(normalLimitKBps, default: SpeedMode.defaultNormalKBps)
+            if kept != normalLimitKBps { normalLimitKBps = kept }
+            defaults.set(normalLimitKBps, forKey: Key.normalLimit)
+        }
+    }
     /// Off by default: watching the clipboard is opt-in.
     var detectClipboard: Bool { didSet { defaults.set(detectClipboard, forKey: Key.clipboard) } }
     var defaultUserAgent: String { didSet { defaults.set(defaultUserAgent, forKey: Key.userAgent) } }
@@ -41,8 +69,8 @@ final class AppSettings {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? URL(filePath: NSHomeDirectory()).appending(path: "Downloads")
         downloadFolder = defaults.string(forKey: Key.folder).map { URL(filePath: $0, directoryHint: .isDirectory) } ?? downloads
-        segmentCount = Self.clamp(defaults.object(forKey: Key.segments) as? Int ?? 8, Self.segmentRange)
-        maxConcurrentDownloads = Self.clamp(defaults.object(forKey: Key.concurrent) as? Int ?? 3, Self.concurrencyRange)
+        segmentCount = Self.segmentRange.clamp(defaults.object(forKey: Key.segments) as? Int ?? 8)
+        maxConcurrentDownloads = Self.concurrencyRange.clamp(defaults.object(forKey: Key.concurrent) as? Int ?? 3)
         // High (unlimited) unless the user chose otherwise: that is how the app behaved before modes existed.
         speedMode = defaults.string(forKey: Key.speedMode).flatMap(SpeedMode.init(rawValue:)) ?? .high
         lowLimitKBps = Self.limit(defaults.object(forKey: Key.lowLimit) as? Int, default: SpeedMode.defaultLowKBps)
@@ -65,10 +93,11 @@ final class AppSettings {
 
     /// A stored or typed limit for Low or Normal, kept in 1...`SpeedLimit.maxKBps`.
     static func limit(_ value: Int?, default fallback: Int) -> Int {
-        min(max(value ?? fallback, 1), SpeedLimit.maxKBps)
+        (1...SpeedLimit.maxKBps).clamp(value ?? fallback)
     }
+}
 
-    private static func clamp(_ value: Int, _ range: ClosedRange<Int>) -> Int {
-        min(max(value, range.lowerBound), range.upperBound)
-    }
+extension ClosedRange {
+    /// `value`, held inside the range.
+    func clamp(_ value: Bound) -> Bound { Swift.min(Swift.max(value, lowerBound), upperBound) }
 }

@@ -8,11 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
+        if let appearance = AppEnvironment.forcedAppearance { NSApp.appearance = appearance }
         // Not tied to the window: downloads resume and are observed even if the window never appears.
-        // UI testing only (sandbox mode): force an appearance without touching system settings.
-        if AppEnvironment.sandboxDirectory != nil, let name = ProcessInfo.processInfo.environment["FETCHTHINGS_APPEARANCE"] {
-            NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
-        }
         AppModel.shared.start()
     }
 
@@ -54,10 +51,13 @@ enum MainWindow {
     /// `canBecomeMain` would miss it exactly when it is hidden, because SwiftUI reports false then.)
     static let sceneID = "main"
 
+    /// The main window, also while it is closed or minimized (it is retained and hidden, not released).
+    static var window: NSWindow? { NSApp.windows.first { $0.identifier?.rawValue == sceneID } }
+
     /// Orders the main window to the front if it is not on screen. Returns whether it was hidden.
     @discardableResult
     static func showIfHidden() -> Bool {
-        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == sceneID }), !window.isVisible else { return false }
+        guard let window, !window.isVisible else { return false }
         if window.isMiniaturized { window.deminiaturize(nil) } // a window in the Dock is not visible either
         window.makeKeyAndOrderFront(nil)
         return true
@@ -100,5 +100,14 @@ final class ServicesProvider: NSObject {
         guard let text = pasteboard.string(forType: .string) else { return }
         AppModel.shared.handleText(text)
         MainWindow.showIfHidden()
+    }
+}
+
+extension NSView {
+    /// The first view of type `V` that passes `test`, this one included, searching depth first through the subviews.
+    func firstDescendant<V: NSView>(of type: V.Type, where test: (V) -> Bool = { _ in true }) -> V? {
+        if let hit = self as? V, test(hit) { return hit }
+        for child in subviews { if let found = child.firstDescendant(of: type, where: test) { return found } }
+        return nil
     }
 }

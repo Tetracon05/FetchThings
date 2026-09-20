@@ -168,6 +168,22 @@ struct SettingsTests {
         #expect(s.speedMode == .high, "an unknown stored mode falls back to the default")
     }
 
+    @Test func numbersKeepThemselvesInRangeWhoeverWritesThem() {
+        let s = AppSettings(defaults: defaults())
+        s.lowLimitKBps = 0
+        #expect(s.lowLimitKBps == 1, "zero would mean unlimited")
+        s.normalLimitKBps = -50
+        #expect(s.normalLimitKBps == 1)
+        s.lowLimitKBps = Int.max
+        #expect(s.lowLimitKBps == SpeedLimit.maxKBps)
+        s.segmentCount = 999
+        #expect(s.segmentCount == AppSettings.segmentRange.upperBound)
+        s.maxConcurrentDownloads = 0
+        #expect(s.maxConcurrentDownloads == AppSettings.concurrencyRange.lowerBound)
+        s.lowLimitKBps = 500
+        #expect(s.lowLimitKBps == 500 && s.limitKBps(for: .low) == 500, "a value in range is left alone")
+    }
+
     @Test func eachModeHasItsOwnLimitAndHighIsUnlimited() {
         let s = AppSettings(defaults: defaults())
         s.speedMode = .low

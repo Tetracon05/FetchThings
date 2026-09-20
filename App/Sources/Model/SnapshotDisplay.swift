@@ -8,6 +8,10 @@ extension DownloadSnapshot {
         return url.displayFileName
     }
 
+    /// The finished file's address; nil until the download has completed. (The engine only reports a `finalURL` for a
+    /// completed download, so the state check only guards a snapshot built by hand.)
+    var completedFileURL: URL? { state == .completed ? finalURL : nil }
+
     var category: FileCategory { FileCategory.classify(filename: filename ?? displayName) }
 
     var isPausable: Bool { state.isRunning || state == .queued }
@@ -43,8 +47,13 @@ enum Formatters {
         count.map(bytes) ?? "—"
     }
 
+    /// A size per second: "1.5 MB/s". (`speed` for a measured rate, this for a limit that is already a whole number.)
+    static func perSecond(_ count: Int64) -> String {
+        String(localized: "\(bytes(count))/s")
+    }
+
     static func speed(_ bytesPerSecond: Double) -> String {
-        bytesPerSecond >= 1 ? String(localized: "\(bytes(Int64(bytesPerSecond)))/s") : "—"
+        bytesPerSecond >= 1 ? perSecond(Int64(exactly: bytesPerSecond.rounded(.towardZero)) ?? .max) : "—"
     }
 
     static func eta(_ seconds: TimeInterval?) -> String {

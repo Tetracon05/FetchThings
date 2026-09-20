@@ -183,23 +183,12 @@ struct Phase2ReviewTests {
         #expect(settings.globalSpeedLimit == Int64(SpeedLimit.maxKBps) * 1000)
 
         var draft = AddDraft(folder: URL(filePath: "/tmp"), segmentCount: 4)
-        draft.linksText = "https://example.com/a"
+        draft.append([URL(string: "https://example.com/a")!])
         draft.speedLimitKBps = Int.max
         #expect((try? draft.makeRequests().first?.options.speedLimit) == Int64(SpeedLimit.maxKBps) * 1000)
     }
 
     // MARK: Add sheet draft
-
-    @Test func theParsedLinksFollowTheText() {
-        var draft = AddDraft(folder: URL(filePath: "/tmp"), segmentCount: 4)
-        #expect(draft.links.isEmpty)
-        draft.linksText = "https://example.com/a\nhttps://example.com/b"
-        #expect(draft.links.count == 2)
-        draft.linksText += "\nhttps://example.com/c"
-        #expect(draft.links.count == 3)
-        draft.linksText = ""
-        #expect(draft.links.isEmpty)
-    }
 
     @Test func closingTheSheetForgetsSecrets() {
         let ctx = makeModel()
@@ -305,9 +294,9 @@ struct Phase2ReviewTests {
     }
 
     @Test func aClosedMainWindowComesBackForIncomingLinks() async throws {
-        let found = await eventually { NSApp.windows.contains { $0.identifier?.rawValue == MainWindow.sceneID } }
+        let found = await eventually { MainWindow.window != nil }
         try #require(found, "the test host should have created its main window")
-        let window = try #require(NSApp.windows.first { $0.identifier?.rawValue == MainWindow.sceneID })
+        let window = try #require(MainWindow.window)
         window.close() // what the red close button does
         #expect(!window.isVisible)
         #expect(MainWindow.showIfHidden(), "the window is gone from the screen, so it must be shown again")

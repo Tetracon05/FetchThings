@@ -102,7 +102,7 @@ private struct DetailForm: View {
                         DetailRow(Text("Checksum"), value: verified ? String(localized: "Verified") : String(localized: "Not verified"))
                     }
                     if let limit = download.speedLimit {
-                        DetailRow(Text("Speed Limit"), value: String(localized: "\(Formatters.bytes(limit))/s"))
+                        DetailRow(Text("Speed Limit"), value: Formatters.perSecond(limit))
                     }
                 }
             }

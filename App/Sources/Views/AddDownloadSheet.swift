@@ -42,7 +42,7 @@ struct AddDownloadSheet: View {
         .animation(.smooth(duration: 0.3), value: errorText)
         .task(id: model.draft.folder) { freeSpace = Self.freeSpaceText(at: model.draft.folder) }
         // What was dropped on the sheet held no links: say so here, where the user is looking.
-        .onChange(of: model.sheetNote) { _, text in
+        .onChange(of: model.sheetNote, initial: true) { _, text in
             guard let text else { return }
             note(text)
             model.sheetNote = nil
@@ -194,10 +194,9 @@ struct AddDownloadSheet: View {
     /// One card per link.
     private var linkCards: some View {
         LazyVStack(spacing: 6) {
-            ForEach(model.draft.links.map(LinkSummary.init)) { link in
-                LinkCard(link: link) {
-                    withAnimation(.smooth(duration: 0.25)) { model.draft.remove(link.url) }
-                }
+            // The summary is made inside the row, so only the rows that are on screen pay for it.
+            ForEach(model.draft.links, id: \.self) { url in
+                LinkCard(link: LinkSummary(url)) { model.draft.remove(url) }
                 .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
         }
@@ -208,7 +207,7 @@ struct AddDownloadSheet: View {
     private func commitPending() -> Bool {
         let found = LinkParser.urls(in: pending)
         guard !found.isEmpty else { return false }
-        withAnimation(.smooth(duration: 0.3)) { model.draft.append(found) }
+        model.draft.append(found)
         pending = ""
         pasteNote = nil
         return true
@@ -232,8 +231,10 @@ struct AddDownloadSheet: View {
 
     /// How many downloads Add would make: the cards, plus a link that is typed but not yet entered.
     private var readyCount: Int {
+        let typed = LinkParser.urls(in: pending)
+        guard !typed.isEmpty else { return model.draft.links.count }
         let known = Set(model.draft.links)
-        return model.draft.links.count + LinkParser.urls(in: pending).filter { !known.contains($0) }.count
+        return model.draft.links.count + typed.filter { !known.contains($0) }.count
     }
 
     /// A short remark under the well that goes away by itself.
@@ -251,7 +252,7 @@ struct AddDownloadSheet: View {
             note(String(localized: "Copy an http or https link first."))
         } else {
             pasteNote = nil
-            withAnimation(.smooth(duration: 0.3)) { model.draft.append(found) }
+            model.draft.append(found)
         }
     }
 
@@ -295,6 +296,8 @@ struct AddDownloadSheet: View {
         .accessibilityElement(children: .combine)
     }
 
+    // The two half-width tiles are laid out tighter than `SettingTile` and `StepperControl`: built from those, "Connections"
+    // wrapped to "Connec-tions" and "Waits until you start it" was cut at its front, in English and in Turkish.
     private var connectionsTile: some View {
         let range = AppSettings.segmentRange
         return HStack(spacing: 10) {
@@ -323,8 +326,7 @@ struct AddDownloadSheet: View {
     }
 
     private func step(_ delta: Int) {
-        let range = AppSettings.segmentRange
-        model.draft.segmentCount = min(max(model.draft.segmentCount + delta, range.lowerBound), range.upperBound)
+        model.draft.segmentCount = AppSettings.segmentRange.clamp(model.draft.segmentCount + delta)
     }
 
     private var pausedTile: some View {
@@ -407,10 +409,7 @@ struct AddDownloadSheet: View {
             AdvancedField(title: "Referer", text: $model.draft.referer, prompt: "https://…")
             AdvancedField(title: "User agent", text: $model.draft.userAgent, prompt: "Default")
             AdvancedField(title: "Cookies", text: $model.draft.cookies, prompt: "name=value; other=value")
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Custom headers")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+            CaptionedField(title: "Custom headers") {
                 TextEditor(text: $model.draft.headersText)
                     .font(.body.monospaced())
                     .frame(height: 56)
@@ -432,19 +431,10 @@ struct AddDownloadSheet: View {
                     .foregroundStyle(.orange)
             }
             AdvancedField(title: "Checksum", text: $model.draft.checksumText, prompt: "sha256:… or md5:…")
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Speed limit")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+            CaptionedField(title: "Speed limit") {
                 HStack(spacing: 8) {
                     TextField("Speed limit", value: $model.draft.speedLimitKBps, format: .number, prompt: Text("0"))
-                        .labelsHidden()
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 70)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .fieldBackground()
+                        .insetField(width: 90, alignment: .trailing)
                     Text("KB/s (0 = unlimited)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -523,7 +513,7 @@ struct AddDownloadSheet: View {
             } else {
                 isAdding = false
                 // Keep only what failed, so adding again cannot duplicate what went through.
-                model.draft.linksText = outcome.failedLinks.map(\.absoluteString).joined(separator: "\n")
+                model.draft.keepOnly(outcome.failedLinks)
                 errorText = outcome.failures.joined(separator: "\n")
             }
         }
@@ -597,10 +587,7 @@ private struct AdvancedField: View {
     var secure = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+        CaptionedField(title: title) {
             Group {
                 if secure {
                     SecureField(title, text: $text, prompt: Text(prompt))
@@ -608,11 +595,7 @@ private struct AdvancedField: View {
                     TextField(title, text: $text, prompt: Text(prompt))
                 }
             }
-            .labelsHidden()
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .fieldBackground()
+            .insetField()
         }
     }
 }

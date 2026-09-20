@@ -77,18 +77,9 @@ struct ToolbarSearchField: View {
     /// of the table: the field is hosted in the toolbar, apart from the window's content.
     @MainActor
     private static func focusFieldInWindow() {
-        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.sceneID }),
-              let field = findTextField(in: window.toolbar?.items.compactMap(\.view) ?? []) else { return }
+        // The one text field among the toolbar's items is the search field.
+        guard let window = MainWindow.window,
+              let field = window.toolbar?.items.lazy.compactMap({ $0.view?.firstDescendant(of: NSTextField.self) }).first else { return }
         window.makeFirstResponder(field)
-    }
-
-    @MainActor
-    private static func findTextField(in views: [NSView]) -> NSTextField? {
-        for view in views {
-            // The one text field among the toolbar's items is the search field.
-            if let field = view as? NSTextField { return field }
-            if let found = findTextField(in: view.subviews) { return found }
-        }
-        return nil
     }
 }

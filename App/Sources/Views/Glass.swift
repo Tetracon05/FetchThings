@@ -51,6 +51,19 @@ extension View {
     }
 }
 
+extension ToolbarContent {
+    /// Keeps a toolbar item out of the one glass capsule that neighbouring items are merged into, so it can draw its
+    /// own. Nothing happens before macOS 26, where the toolbar has no such capsule.
+    @ToolbarContentBuilder
+    func outsideSharedGlass() -> some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
+    }
+}
+
 /// Lets nearby glass shapes blend and share one rendering pass. Just the content where glass is not available.
 struct GlassGroup<Content: View>: View {
     var spacing: CGFloat = 0
