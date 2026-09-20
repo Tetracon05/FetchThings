@@ -5,7 +5,13 @@ import SwiftUI
 /// Previews of finished files as Finder shows them: a frame of a video, a photo, the first page of a PDF.
 @MainActor
 enum FileThumbnails {
-    private static var cache: [String: NSImage] = [:]
+    /// Decoded pictures can be large (up to about half a megabyte each): a bounded cache that drops entries one by one,
+    /// and under memory pressure, rather than one that is emptied all at once when it fills.
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 100
+        return cache
+    }()
 
     private static var scale: CGFloat { NSScreen.main?.backingScaleFactor ?? 2 }
 
@@ -18,14 +24,14 @@ enum FileThumbnails {
     }
 
     static func cached(_ url: URL, size: CGSize) -> NSImage? {
-        cache[key(url, size)]
+        cache.object(forKey: key(url, size) as NSString)
     }
 
     /// The preview of the file's contents, or nil when the system has none for this kind of file (a disk image, an
     /// archive), in which case the caller keeps the file's icon. Never throws: a missing preview is not an error.
     static func load(_ url: URL, size: CGSize) async -> NSImage? {
         let key = key(url, size)
-        if let hit = cache[key] { return hit }
+        if let hit = cache.object(forKey: key as NSString) { return hit }
         // `.icon` is left out on purpose: the icon path (`FileIcons`) already covers files without a preview.
         let request = QLThumbnailGenerator.Request(
             fileAt: url, size: size, scale: scale, representationTypes: [.thumbnail, .lowQualityThumbnail]
@@ -34,8 +40,7 @@ enum FileThumbnails {
             return nil
         }
         let image = representation.nsImage
-        if cache.count > 100 { cache.removeAll() }
-        cache[key] = image
+        cache.setObject(image, forKey: key as NSString)
         return image
     }
 }
@@ -55,14 +60,14 @@ struct DownloadPicture: View {
     /// A preview belongs to the file it was made for, so a stale one is never shown for another selection.
     @State private var preview: (url: URL, image: NSImage)?
 
-    private var fileURL: URL? { download.state == .completed ? download.finalURL : nil }
+    private var fileURL: URL? { download.completedFileURL }
 
     init(download: DownloadSnapshot, box: CGSize, iconSide: CGFloat) {
         self.download = download
         self.box = box
         self.iconSide = iconSide
         // Coming back to a file that was already drawn must not flash its icon first.
-        if download.state == .completed, let url = download.finalURL, let image = FileThumbnails.cached(url, size: box) {
+        if let url = download.completedFileURL, let image = FileThumbnails.cached(url, size: box) {
             _preview = State(initialValue: (url, image))
         }
     }
@@ -173,10 +178,10 @@ struct FileDragSource: NSViewRepresentable {
     /// (the size the pane showed it at), else by its icon.
     @MainActor
     static func items(for downloads: [DownloadSnapshot], in model: AppModel, box: CGSize) -> [Item] {
-        model.dragFiles(of: downloads).enumerated().map { index, url in
+        downloads.compactMap(model.availableFile(of:)).enumerated().map { index, url in
             // Only the first few need a picture: a pile of thousands would take long to build and only the top shows.
             let image = index < DragSourceView.pictured
-                ? FileThumbnails.cached(url, size: box) ?? NSWorkspace.shared.icon(forFile: url.path)
+                ? FileThumbnails.cached(url, size: box) ?? FileIcons.icon(forFile: url, fallbackName: url.lastPathComponent)
                 : NSImage()
             return Item(url: url, image: image)
         }

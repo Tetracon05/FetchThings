@@ -82,12 +82,7 @@ private struct NetworkSettings: View {
             TileSection(title: Text("Requests")) {
                 SettingTile(symbol: "person.text.rectangle.fill", tint: .gray, title: Text("Default user agent")) {
                     TextField("Default user agent", text: $settings.defaultUserAgent, prompt: Text("System default"))
-                        .labelsHidden()
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .frame(width: 230)
-                        .fieldBackground()
+                        .insetField(width: 230)
                 }
             }
         }
@@ -98,19 +93,9 @@ private struct NetworkSettings: View {
         SettingTile(symbol: mode.symbol, tint: mode.color, title: Text(mode.title)) {
             HStack(spacing: 8) {
                 TextField("Speed limit", value: limit, format: .number.grouping(.never), prompt: Text("1"))
-                    .labelsHidden()
-                    .textFieldStyle(.plain)
-                    .multilineTextAlignment(.trailing)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(width: 90)
-                    .fieldBackground()
-                    .onChange(of: limit.wrappedValue) {
-                        // Zero would mean unlimited, and a huge number would overflow: keep it in range.
-                        let clamped = AppSettings.limit(limit.wrappedValue, default: 1)
-                        if clamped != limit.wrappedValue { limit.wrappedValue = clamped }
-                        Task { await model.applyEngineSettings() }
-                    }
+                    .insetField(width: 90, alignment: .trailing)
+                    // `AppSettings` keeps the number in range (zero would mean unlimited, a huge one would overflow).
+                    .onChange(of: limit.wrappedValue) { Task { await model.applyEngineSettings() } }
                 Text("KB/s").foregroundStyle(.secondary)
             }
         }

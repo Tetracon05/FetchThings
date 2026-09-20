@@ -138,6 +138,18 @@ struct StorageTests {
         #expect(try Data(contentsOf: victim) == Data("do not touch".utf8))
     }
 
+    @Test func snapshotsCarryTheOrderDownloadsWereAddedIn() async throws {
+        let env = try TestEnvironment(); defer { env.cleanup() }
+        let manager = env.makeManager()
+        var ids: [DownloadID] = []
+        for n in 1...5 {
+            ids.append(try await manager.add(env.newDownload(URL(string: "http://127.0.0.1:9/\(n).bin")!) { $0.startPaused = true }))
+        }
+        let sequences = await ids.asyncMap { await manager.snapshot($0)?.sequence }
+        #expect(sequences.compactMap { $0 } == sequences.compactMap { $0 }.sorted(), "counts up in the order they were added")
+        #expect(Set(sequences.compactMap { $0 }).count == 5, "and never repeats, unlike createdAt, which job files keep only to the millisecond")
+    }
+
     @Test func fileStoreRoundTripsAndKeepsQueueOrder() async throws {
         let env = try TestEnvironment()
         defer { env.cleanup() }
@@ -259,5 +271,13 @@ struct HelperTests {
         try Data(count: 1234).write(to: env.file("a.bin"))
         #expect(DestinationResolver.fileSize(of: env.file("a.bin")) == 1234)
         #expect(DestinationResolver.fileSize(of: env.file("missing.bin")) == nil)
+    }
+}
+
+private extension Sequence {
+    func asyncMap<T>(_ transform: (Element) async -> T) async -> [T] {
+        var result: [T] = []
+        for element in self { result.append(await transform(element)) }
+        return result
     }
 }

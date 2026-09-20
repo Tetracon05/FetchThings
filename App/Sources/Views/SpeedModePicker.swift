@@ -44,7 +44,7 @@ struct SpeedModePicker: View {
         }
         .accessibilityLabel("Speed mode")
         .accessibilityValue("\(String(localized: mode.title)), \(mode.accessibleLimit(kbps: limit))")
-        .help(mode.help(limitText: mode.limitText(kbps: limit)))
+        .help(mode.help(kbps: limit))
     }
 }
 
@@ -79,7 +79,7 @@ private struct SpeedModeOptions: View {
                 .accessibilityLabel(mode.title)
                 .accessibilityValue(mode.accessibleLimit(kbps: limit))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
-                .help(mode.help(limitText: mode.limitText(kbps: limit)))
+                .help(mode.help(kbps: limit))
             }
         }
         .padding(SpeedModeShape.inset)
@@ -145,10 +145,11 @@ extension SpeedMode {
         kbps > 0 ? String(localized: "Limited to \(kbps.formatted(.number.grouping(.never))) kilobytes per second") : String(localized: "No limit")
     }
 
-    func help(limitText: String) -> String {
-        switch self {
-        case .low: String(localized: "Low speed: \(limitText) for all downloads together")
-        case .normal: String(localized: "Normal speed: \(limitText) for all downloads together")
+    func help(kbps: Int) -> String {
+        let limit = limitText(kbps: kbps)
+        return switch self {
+        case .low: String(localized: "Low speed: \(limit) for all downloads together")
+        case .normal: String(localized: "Normal speed: \(limit) for all downloads together")
         case .high: String(localized: "High speed: no limit")
         }
     }

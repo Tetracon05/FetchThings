@@ -140,12 +140,8 @@ struct MainView: View {
     /// own glass (see `ToolbarSearchField`); by default the toolbar would merge it into the buttons' capsule.
     @ToolbarContentBuilder
     private var searchItem: some ToolbarContent {
-        if #available(macOS 26.0, *) {
-            ToolbarItem(placement: .primaryAction) { searchField }
-                .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .primaryAction) { searchField }
-        }
+        ToolbarItem(placement: .primaryAction) { searchField }
+            .outsideSharedGlass()
     }
 
     private var searchField: some View {
@@ -174,8 +170,7 @@ struct ClipboardBanner: View {
                 .glassButton()
         }
         .controlSize(.small)
-        .padding(.leading, 8)
-        .padding(.trailing, 8)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .glassSurface(.capsule)
         .padding(.horizontal, 12)

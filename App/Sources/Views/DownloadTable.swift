@@ -89,7 +89,7 @@ struct DownloadTable: View {
         } else {
             ContentUnavailableView(
                 "Nothing Here", systemImage: model.sidebarSelection.symbol,
-                description: Text("No \(model.sidebarSelection.title.localizedLowercase) downloads.")
+                description: Text(model.sidebarSelection.emptyMessage)
             )
         }
     }
@@ -108,7 +108,12 @@ struct DownloadTable: View {
                 Button("Open") { model.open(only) }
             }
             if targets.contains(where: { model.availableFile(of: $0) != nil }) {
-                Button("Quick Look") { QuickLookController.shared.toggle(for: model) }
+                Button("Quick Look") {
+                    // Quick Look shows the selection. As in Finder, a row that is right-clicked without being selected
+                    // becomes the selection first (SwiftUI passes the menu only that row, and leaves the selection alone).
+                    model.selectIfNeeded(ids)
+                    QuickLookController.shared.toggle(for: model)
+                }
             }
             Button("Show in Finder") { model.revealInFinder(ids) }
             Button(targets.count == 1 ? "Copy Link" : "Copy Links") { model.copyLinks(ids) }

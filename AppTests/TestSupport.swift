@@ -68,7 +68,8 @@ func snapshot(
     speed: Double = 0,
     created: TimeInterval = 0,
     failure: String? = nil,
-    finalURL: URL? = nil
+    finalURL: URL? = nil,
+    sequence: Int = 0
 ) -> DownloadSnapshot {
     DownloadSnapshot(
         url: URL(string: url)!,
@@ -80,7 +81,8 @@ func snapshot(
         bytesPerSecond: speed,
         failure: failure,
         createdAt: Date(timeIntervalSince1970: created),
-        finalURL: finalURL
+        finalURL: finalURL,
+        sequence: sequence
     )
 }
 

@@ -14,7 +14,16 @@ public protocol RateLimiting: Sendable {
 }
 
 extension RateLimiting {
-    public var maxRequestBytes: Int? { nil }
+    /// Waits until nothing is owed. The debt is read again every `step` seconds instead of being slept out in one go,
+    /// so a limit that is raised or removed while a connection waits (a change of speed mode) is noticed within a
+    /// step rather than after the whole old debt.
+    public func waitUntilClear(step: TimeInterval = 0.25) async throws {
+        while true {
+            let owed = pendingDelay()
+            guard owed > 0 else { return }
+            try await Task.sleep(for: .seconds(min(owed, step)))
+        }
+    }
 }
 
 /// Token bucket. Bytes are spent after they arrive, so the bucket can go into debt; the debt is what

@@ -71,8 +71,7 @@ final class SegmentedDownloader: Downloader, Sendable {
             try Task.checkCancellation()
             // A stall can only hold back a request that is still running. With small pieces the previous one may
             // already be complete, so the next must wait out what the limiter is owed, or the limit is bypassed.
-            let owed = context.limiter.pendingDelay()
-            if owed > 0 { try await Task.sleep(for: .seconds(owed)) }
+            try await context.limiter.waitUntilClear()
 
             guard let attempt = scheduler.prepareAttempt(index) else { return }
             let before = scheduler.received(index)

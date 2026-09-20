@@ -144,7 +144,8 @@ actor DownloadJob {
             completedAt: record.completedAt,
             speedLimit: record.options.speedLimit,
             checksumVerified: record.checksumVerified,
-            finalURL: record.state == .completed ? record.finalURL : nil
+            finalURL: record.state == .completed ? record.finalURL : nil,
+            sequence: record.sequence
         )
     }
 

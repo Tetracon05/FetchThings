@@ -1,3 +1,4 @@
+import AppKit
 import DownloadKit
 import Foundation
 
@@ -5,6 +6,13 @@ import Foundation
 /// job files or keychain, so it gets throwaway storage instead.
 @MainActor
 enum AppEnvironment {
+    /// UI testing only: in sandbox mode, `FETCHTHINGS_APPEARANCE=dark|light` forces an appearance without touching the
+    /// system's settings.
+    static var forcedAppearance: NSAppearance? {
+        guard sandboxDirectory != nil, let name = ProcessInfo.processInfo.environment["FETCHTHINGS_APPEARANCE"] else { return nil }
+        return NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
+    }
+
     static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil

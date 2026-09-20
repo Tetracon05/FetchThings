@@ -16,8 +16,6 @@ struct LinkSummary: Equatable, Identifiable {
         let host = url.host(percentEncoded: false) ?? ""
         self.host = host
         self.isEncrypted = url.scheme?.lowercased() == "https"
-        let last = url.lastPathComponent
-        let name = last.removingPercentEncoding ?? last
-        self.displayName = name.isEmpty || name == "/" ? host : name
+        self.displayName = url.displayFileName
     }
 }

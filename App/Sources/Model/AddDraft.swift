@@ -3,10 +3,12 @@ import Foundation
 
 /// The state of the Add Download sheet, and the rules for turning it into engine requests.
 struct AddDraft: Equatable {
-    var linksText = "" { didSet { links = LinkParser.urls(in: linksText) } }
-    /// The links in `linksText`, parsed once per edit rather than on every read (the sheet reads it several
-    /// times per render).
+    /// The links to add, in the order they were entered, without repeats and at most `LinkParser.maxLinks`.
     private(set) var links: [URL] = []
+    /// Links that came from outside while the sheet was already open (a `fetchthings://` link, a drop, the Services
+    /// menu). The cookies, headers and login typed into the sheet are not sent with them: any web page can propose a
+    /// link, and it must not be able to borrow what the user entered for another site. Always a subset of `links`.
+    private(set) var linksWithoutSecrets: Set<URL> = []
     var folder: URL
     var segmentCount: Int
     var startPaused = false
@@ -30,28 +32,43 @@ struct AddDraft: Equatable {
         self.userAgent = userAgent
     }
 
-    /// Adds links that are not in the list yet, one per line after what is already there.
-    mutating func append(_ urls: [URL]) {
+    /// Adds the http(s) links that are not in the list yet. `fromOutside` marks links the user did not type or paste
+    /// into the sheet (see `linksWithoutSecrets`); a link the user adds themselves, even one that came from outside
+    /// first, is theirs again.
+    mutating func append(_ urls: [URL], fromOutside: Bool = false) {
         var known = Set(links)
-        let fresh = urls.filter { known.insert($0).inserted }
-        guard !fresh.isEmpty else { return }
-        var text = linksText
-        if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
-        linksText = text + fresh.map(\.absoluteString).joined(separator: "\n")
+        let fresh = urls
+            .filter { LinkParser.httpURL($0.absoluteString) != nil && known.insert($0).inserted }
+            .prefix(max(0, LinkParser.maxLinks - links.count))
+        if fromOutside { linksWithoutSecrets.formUnion(fresh) } else { linksWithoutSecrets.subtract(urls) }
+        links += fresh
     }
 
-    /// Takes one link out. What is left is written back as one link per line (other text in the field goes with it).
+    /// Takes one link out.
     mutating func remove(_ url: URL) {
-        linksText = links.filter { $0 != url }.map(\.absoluteString).joined(separator: "\n")
+        links.removeAll { $0 == url }
+        linksWithoutSecrets.remove(url)
+    }
+
+    /// After an add that partly failed: keeps only the links that did not go through, so adding again cannot repeat
+    /// what did.
+    mutating func keepOnly(_ urls: [URL]) {
+        let keep = Set(urls)
+        links.removeAll { !keep.contains($0) }
+        linksWithoutSecrets.formIntersection(links)
+    }
+
+    /// Whether the sheet holds cookies, headers or a login that would be sent with the links.
+    var hasSecrets: Bool {
+        ![cookies, headersText, username].allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     /// Basic-auth credentials would go over the wire in clear text.
     var sendsCredentialsOverPlainHTTP: Bool {
-        !username.isEmpty && links.contains { $0.scheme?.lowercased() == "http" }
+        !username.isEmpty && links.contains { !linksWithoutSecrets.contains($0) && $0.scheme?.lowercased() == "http" }
     }
 
     func makeRequests() throws -> [NewDownload] {
-        let links = links
         guard !links.isEmpty else { throw AddDraftError.noLinks }
 
         let trimmedName = filename.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -84,7 +101,7 @@ struct AddDraft: Equatable {
                 destinationDirectory: folder,
                 filename: trimmedName.isEmpty ? nil : trimmedName,
                 options: options,
-                sensitive: sensitive,
+                sensitive: linksWithoutSecrets.contains(link) ? SensitiveOptions() : sensitive,
                 startPaused: startPaused
             )
         }
@@ -119,7 +136,7 @@ enum AddDraftError: LocalizedError, Equatable {
         case .filenameNeedsSingleLink: String(localized: "A file name can only be set when adding a single link.")
         case .invalidReferer: String(localized: "The Referer must be an http or https address.")
         case .invalidChecksum: String(localized: "The checksum must be a SHA-256 or MD5 digest, for example sha256:9f86d0…")
-        case .invalidHeaderLine(let line): "“\(line)” is not a header. Write each one as Name: value."
+        case .invalidHeaderLine(let line): String(localized: "“\(line)” is not a header. Write each one as Name: value.")
         }
     }
 }

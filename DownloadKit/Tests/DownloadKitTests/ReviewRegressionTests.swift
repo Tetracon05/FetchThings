@@ -339,7 +339,7 @@ struct ReviewRegressionTests {
         let done = await waitForCompletion(second, id)
 
         #expect(done.state == .failed)
-        #expect(done.failure?.isEmpty == false, "a failure message must explain it") // its wording is localized, so it is not asserted
+        #expect(done.failure == DownloadError.credentialsUnavailable.errorDescription, "it must fail for this reason, not another")
         #expect(server.requests.isEmpty, "it must not have tried unauthenticated")
         #expect(!DownloadError.credentialsUnavailable.isRetryable)
     }

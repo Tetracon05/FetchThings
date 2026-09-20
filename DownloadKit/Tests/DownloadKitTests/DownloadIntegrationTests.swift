@@ -237,7 +237,9 @@ struct DownloadIntegrationTests {
         let done = await waitForCompletion(manager, id)
 
         #expect(done.state == .failed)
-        #expect(done.failure?.contains("disk space") == true, "\(done.failure ?? "")")
+        // The wording is localized, so check for the figure in it, formatted the way the message formats it.
+        let needed = ByteCountFormatter.string(fromByteCount: 200_000_000_000_000, countStyle: .file)
+        #expect(done.failure?.contains(needed) == true, "\(done.failure ?? "")")
         #expect(server.dataRequests.isEmpty)
     }
 
@@ -285,7 +287,7 @@ struct DownloadIntegrationTests {
         let done = await waitForCompletion(manager, id)
 
         #expect(done.state == .failed)
-        #expect(done.failure?.contains("Checksum mismatch") == true, "\(done.failure ?? "")")
+        #expect(done.failure?.contains(wrong.hex) == true, "the message names the checksum that was expected: \(done.failure ?? "")")
         #expect(done.checksumVerified != true)
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: env.downloads.path)
         #expect(leftovers.isEmpty, "neither the corrupt file nor its .part may remain: \(leftovers)")

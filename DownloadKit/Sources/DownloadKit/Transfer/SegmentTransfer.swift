@@ -218,8 +218,12 @@ final class SegmentTransfer: NSObject, URLSessionDataDelegate, @unchecked Sendab
         scheduleResume(task, after: delay)
     }
 
+    /// How often a stalled connection looks at the limiter again, so that a limit that is raised or removed while
+    /// it waits lets it go on within this time and not after the whole old debt.
+    private static let recheckInterval: TimeInterval = 0.25
+
     private func scheduleResume(_ task: URLSessionDataTask, after delay: TimeInterval) {
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [self] in
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + min(delay, Self.recheckInterval)) { [self] in
             let owed = limiter.pendingDelay()
             if owed > 0.001 {
                 scheduleResume(task, after: owed)

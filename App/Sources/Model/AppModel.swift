@@ -33,6 +33,8 @@ final class AppModel {
     var isSearchFocused = false
 
     var showAddSheet = false
+    /// A remark for the Add sheet to show under its links field (see `report`); the sheet takes it and clears it.
+    var sheetNote: String?
     var draft: AddDraft
     var alert: AlertMessage?
     var pendingRemoval: PendingRemoval?
@@ -151,8 +153,13 @@ final class AppModel {
                     || download.displayName.localizedCaseInsensitiveContains(query)
                     || download.url.absoluteString.localizedCaseInsensitiveContains(query))
         }
-        // The tiebreakers keep equal rows in a stable order between refreshes.
-        let tiebreakers = [KeyPathComparator(\DownloadSnapshot.createdAt, order: .reverse), KeyPathComparator(\DownloadSnapshot.id.uuidString)]
+        // The tiebreakers keep equal rows in a stable order between refreshes. A batch added together can share a
+        // `createdAt` (job files keep milliseconds), so the order they were added in comes before the id.
+        let tiebreakers = [
+            KeyPathComparator(\DownloadSnapshot.createdAt, order: .reverse),
+            KeyPathComparator(\DownloadSnapshot.sequence, order: .reverse),
+            KeyPathComparator(\DownloadSnapshot.id.uuidString),
+        ]
         visibleDownloads = filtered.sorted(using: sortOrder + tiebreakers)
 
         let visibleIDs = Set(visibleDownloads.map(\.id))
@@ -168,9 +175,12 @@ final class AppModel {
     func count(for item: SidebarItem) -> Int { counts[item] ?? 0 }
 
     private func refreshCounts() {
-        var fresh: [SidebarItem: Int] = [:]
-        for item in SidebarItem.downloadItems + SidebarItem.categoryItems {
-            fresh[item] = downloads.values.reduce(0) { $0 + (item.includes($1) ? 1 : 0) }
+        var fresh = Dictionary(uniqueKeysWithValues: (SidebarItem.downloadItems + SidebarItem.categoryItems).map { ($0, 0) })
+        for download in downloads.values {
+            for item in SidebarItem.downloadItems where item.includes(download) { fresh[item, default: 0] += 1 }
+            // A download is in exactly one category; classifying it once (not once per category row) matters when many
+            // downloads still have no file name and it is worked out from the address.
+            fresh[.category(download.category), default: 0] += 1
         }
         if fresh != counts { counts = fresh }
     }
@@ -235,7 +245,7 @@ final class AppModel {
     private func performRemoval(of targets: [DownloadSnapshot], trashFiles: Bool) {
         Task {
             for target in targets {
-                if trashFiles, target.state == .completed, let file = target.finalURL {
+                if trashFiles, let file = target.completedFileURL {
                     do {
                         try trash(file)
                     } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
@@ -269,7 +279,7 @@ final class AppModel {
     }
 
     func open(_ download: DownloadSnapshot) {
-        guard download.state == .completed, let url = download.finalURL else { return }
+        guard let url = download.completedFileURL else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -278,7 +288,7 @@ final class AppModel {
     /// The finished file of a download, when it is (still) there. Only a real file can be dragged out or previewed: a
     /// running download has just a `.part` file, and a finished one may have been moved or deleted since.
     func availableFile(of download: DownloadSnapshot) -> URL? {
-        guard download.state == .completed, let url = download.finalURL, FileManager.default.fileExists(atPath: url.path) else {
+        guard let url = download.completedFileURL, FileManager.default.fileExists(atPath: url.path) else {
             return nil
         }
         return url
@@ -300,12 +310,6 @@ final class AppModel {
         }
     }
 
-    /// The files to hand over when dragging `downloads` out of the details pane: the finished ones that are still there,
-    /// in the order given.
-    func dragFiles(of downloads: [DownloadSnapshot]) -> [URL] {
-        downloads.compactMap(availableFile(of:))
-    }
-
     /// What Quick Look shows for the selection: the selected finished files, in on-screen order.
     var quickLookItems: [QuickLookItem] {
         selectedDownloads.compactMap { download in
@@ -315,12 +319,21 @@ final class AppModel {
 
     /// Whether the Quick Look command can do anything. Cheap, so a menu can ask on every refresh: it does not look at
     /// the disk the way `quickLookItems` does.
-    var canQuickLookSelection: Bool { selectedDownloads.contains { $0.state == .completed && $0.finalURL != nil } }
+    var canQuickLookSelection: Bool { selectedDownloads.contains { $0.completedFileURL != nil } }
+
+    /// Makes `ids` the selection unless they are already part of it.
+    func selectIfNeeded(_ ids: Set<DownloadID>) {
+        guard !ids.isSubset(of: selection) else { return }
+        let visible = Set(visibleDownloads.map(\.id))
+        selection = ids.intersection(visible)
+    }
+
+    /// The row a download has in the list on screen.
+    func row(of id: DownloadID) -> Int? { visibleDownloads.firstIndex { $0.id == id } }
 
     /// Moves a single selection up or down the list, as the arrow keys do, and stops at either end.
     func moveSelection(by offset: Int) {
-        guard selection.count == 1, let only = selection.first,
-              let index = visibleDownloads.firstIndex(where: { $0.id == only }) else { return }
+        guard selection.count == 1, let only = selection.first, let index = row(of: only) else { return }
         let target = min(max(index + offset, 0), visibleDownloads.count - 1)
         selection = [visibleDownloads[target].id]
     }
@@ -343,7 +356,8 @@ final class AppModel {
                 outcome.added += 1
             } catch {
                 outcome.failedLinks.append(request.url)
-                outcome.failures.append("\(request.url.absoluteString): \(error.localizedDescription)")
+                // Never the password of a `user:pass@` link: this text is shown, and can be selected and copied.
+                outcome.failures.append("\(request.url.withoutCredentials.absoluteString): \(error.localizedDescription)")
             }
         }
         return outcome
@@ -351,13 +365,13 @@ final class AppModel {
 
     /// Opens the Add sheet with `links` filled in. If the sheet is already open, they are appended.
     func presentAddSheet(links: [URL] = []) {
-        let text = links.map(\.absoluteString).joined(separator: "\n")
         log.info("Showing the Add sheet with \(links.count, privacy: .public) link(s); nothing is added until confirmed")
         if showAddSheet {
-            if !text.isEmpty { draft.linksText += (draft.linksText.isEmpty || draft.linksText.hasSuffix("\n") ? "" : "\n") + text }
+            // Links from outside join the ones the user is looking at, but do not get the cookies and login they typed.
+            draft.append(links, fromOutside: true)
         } else {
             resetDraft()
-            draft.linksText = text
+            draft.append(links)
             showAddSheet = true
         }
     }
@@ -365,6 +379,7 @@ final class AppModel {
     /// Forgets everything typed into the Add sheet, passwords and cookies included. Called when the sheet closes,
     /// so secrets do not linger in memory.
     func resetDraft() {
+        sheetNote = nil
         draft = AddDraft(folder: settings.downloadFolder, segmentCount: settings.segmentCount, userAgent: settings.defaultUserAgent)
     }
 
@@ -376,9 +391,9 @@ final class AppModel {
             log.info("Received \(urls.count, privacy: .public) item(s) from the system, \(resolution.links.count, privacy: .public) link(s) found")
             if !resolution.links.isEmpty { presentAddSheet(links: resolution.links) }
             if let problem = resolution.problems.first {
-                alert = AlertMessage(title: resolution.links.isEmpty ? String(localized: "No Links Found") : String(localized: "Some Items Were Skipped"), message: problem)
+                report(title: resolution.links.isEmpty ? String(localized: "No Links Found") : String(localized: "Some Items Were Skipped"), message: problem)
             } else if resolution.links.isEmpty {
-                alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "There were no http or https links in what you opened or dropped."))
+                report(title: String(localized: "No Links Found"), message: String(localized: "There were no http or https links in what you opened or dropped."))
             }
         }
     }
@@ -387,9 +402,19 @@ final class AppModel {
     func handleText(_ text: String) {
         let links = LinkParser.urls(in: text)
         if links.isEmpty {
-            alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "The text doesn’t contain an http or https link."))
+            report(title: String(localized: "No Links Found"), message: String(localized: "The text doesn’t contain an http or https link."))
         } else {
             presentAddSheet(links: links)
+        }
+    }
+
+    /// Tells the user that what they dropped or pasted held nothing to add. While the Add sheet is up an alert would sit
+    /// on the window behind it and only appear once the sheet closes, so the sheet shows the remark itself.
+    private func report(title: String, message: String) {
+        if showAddSheet {
+            sheetNote = message
+        } else {
+            alert = AlertMessage(title: title, message: message)
         }
     }
 
@@ -397,7 +422,7 @@ final class AppModel {
         Task {
             let links = await pasteboard.links()
             if links.isEmpty {
-                alert = AlertMessage(title: String(localized: "No Links on the Clipboard"), message: String(localized: "Copy an http or https link first."))
+                report(title: String(localized: "No Links on the Clipboard"), message: String(localized: "Copy an http or https link first."))
             } else {
                 presentAddSheet(links: links)
             }

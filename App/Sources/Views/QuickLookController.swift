@@ -64,19 +64,10 @@ final class QuickLookController: NSObject {
     /// The downloads table, for the zoom animation and for keeping the selected row in view. Nil if it is not found,
     /// in which case both are skipped.
     private var table: NSTableView? {
-        guard let root = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.sceneID })?.contentView else { return nil }
-        return Self.findTable(in: root)
+        MainWindow.window?.contentView?.firstDescendant(of: NSTableView.self) { $0.accessibilityIdentifier() == DownloadTable.accessibilityID }
     }
 
-    private static func findTable(in view: NSView) -> NSTableView? {
-        if let table = view as? NSTableView, table.accessibilityIdentifier() == DownloadTable.accessibilityID { return table }
-        for child in view.subviews { if let found = findTable(in: child) { return found } }
-        return nil
-    }
-
-    private func row(of item: PreviewItem) -> Int? {
-        model?.visibleDownloads.firstIndex { $0.id == item.item.id }
-    }
+    private func row(of item: PreviewItem) -> Int? { model?.row(of: item.item.id) }
 }
 
 private final class PreviewItem: NSObject, QLPreviewItem {
@@ -98,7 +89,9 @@ extension QuickLookController: @preconcurrency QLPreviewPanelDelegate {
     /// The arrow keys, while the panel is the key window: with one file showing they move the selection in the list
     /// (as Finder's list does); with several the panel pages through them itself.
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
-        guard event.type == .keyDown, items.count == 1, let model else { return false }
+        // One file showing *and* one row selected: with a wider selection the arrows have no row to move (and the
+        // panel must not swallow them for nothing).
+        guard event.type == .keyDown, items.count == 1, let model, model.selection.count == 1 else { return false }
         let offset: Int
         switch event.keyCode {
         case 126, 123: offset = -1 // up, left
@@ -106,7 +99,7 @@ extension QuickLookController: @preconcurrency QLPreviewPanelDelegate {
         default: return false
         }
         model.moveSelection(by: offset)
-        if let only = model.selection.first, let row = model.visibleDownloads.firstIndex(where: { $0.id == only }) {
+        if let only = model.selection.first, let row = model.row(of: only) {
             table?.scrollRowToVisible(row)
         }
         return true
@@ -124,6 +117,6 @@ extension QuickLookController: @preconcurrency QLPreviewPanelDelegate {
 
     func previewPanel(_ panel: QLPreviewPanel!, transitionImageFor item: (any QLPreviewItem)!, contentRect: UnsafeMutablePointer<NSRect>!) -> Any! {
         guard let item = item as? PreviewItem else { return nil }
-        return NSWorkspace.shared.icon(forFile: item.item.url.path)
+        return FileIcons.icon(forFile: item.item.url, fallbackName: item.item.title)
     }
 }

@@ -63,7 +63,7 @@ struct StepperControl: View {
     }
 
     private func step(_ delta: Int) {
-        value = min(max(value + delta, range.lowerBound), range.upperBound)
+        value = range.clamp(value + delta)
     }
 }
 
@@ -103,10 +103,7 @@ struct TileSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            title
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 6)
+            title.sectionCaption()
             GlassGroup(spacing: 4) {
                 VStack(spacing: 10) { content }
             }
@@ -129,10 +126,7 @@ struct InsetGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            title
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 6)
+            title.sectionCaption()
             VStack(spacing: 0) {
                 Group(subviews: content) { rows in
                     ForEach(rows.indices, id: \.self) { index in
@@ -175,8 +169,8 @@ struct DetailRow<Value: View>: View {
 }
 
 extension DetailRow where Value == Text {
-    init(_ title: Text, value: String, stacked: Bool = false) {
-        self.init(title: title, stacked: stacked) { Text(value) }
+    init(_ title: Text, value: String) {
+        self.init(title: title) { Text(value) }
     }
 }
 
@@ -191,6 +185,41 @@ extension View {
     func fieldBackground() -> some View {
         background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.10)))
+    }
+
+    /// A one-line text field on a soft inset. `width` is that of the whole inset, padding included.
+    func insetField(width: CGFloat? = nil, alignment: TextAlignment = .leading) -> some View {
+        labelsHidden()
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(alignment)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: width)
+            .fieldBackground()
+    }
+}
+
+extension Text {
+    /// The small grey caption over a group of tiles or rows.
+    func sectionCaption() -> some View {
+        font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 6)
+    }
+}
+
+/// A small caption over a control, for the fields of a form.
+struct CaptionedField<Content: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            content
+        }
     }
 }
 
