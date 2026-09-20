@@ -116,6 +116,10 @@ private struct DetailForm: View {
         VStack(spacing: 10) {
             // A preview of the contents once the file is there (a video frame, a photo), its icon before that.
             DownloadPicture(download: download, box: DownloadPicture.headerBox, iconSide: 112)
+                // A new picture for each download: its state starts from what is already drawn (no flash of the icon
+                // while arrowing through files) and cannot carry over a preview made for another file, or an old
+                // version of this one.
+                .id(download.id)
                 // Drag the picture to take the file along.
                 .overlay { FileDragSource { FileDragSource.items(for: [download], in: model, box: DownloadPicture.headerBox) } }
             VStack(spacing: 6) {
@@ -190,6 +194,6 @@ private struct SegmentMap: View {
         .glassSurface(.capsule)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Connection map")
-        .accessibilityValue("\(segments.count) parts, \(Formatters.percent(Double(segments.reduce(0) { $0 + $1.received }) / Double(total))) fetched")
+        .accessibilityValue("Parts: \(segments.count), \(Formatters.percent(Double(segments.reduce(0) { $0 + $1.received }) / Double(total))) fetched")
     }
 }

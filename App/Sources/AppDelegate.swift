@@ -58,6 +58,7 @@ enum MainWindow {
     @discardableResult
     static func showIfHidden() -> Bool {
         guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == sceneID }), !window.isVisible else { return false }
+        if window.isMiniaturized { window.deminiaturize(nil) } // a window in the Dock is not visible either
         window.makeKeyAndOrderFront(nil)
         return true
     }

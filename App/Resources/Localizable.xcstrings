@@ -209,22 +209,6 @@
         }
       }
     },
-    "%lld parts, %@ fetched" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld parts, %2$@ fetched"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld parça, %@ alındı"
-          }
-        }
-      }
-    },
     "0" : {
       "shouldTranslate" : false
     },
@@ -1021,6 +1005,16 @@
         }
       }
     },
+    "Links that came from outside this window are sent without the cookies, headers or login you entered." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu pencerenin dışından gelen bağlantılar, girdiğiniz çerezler, başlıklar veya oturum bilgisi olmadan gönderilir."
+          }
+        }
+      }
+    },
     "Links to download" : {
       "localizations" : {
         "tr" : {
@@ -1087,16 +1081,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hayır"
-          }
-        }
-      }
-    },
-    "No %@ downloads." : {
-      "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ indirme yok."
           }
         }
       }
@@ -1247,6 +1231,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Diğer"
+          }
+        }
+      }
+    },
+    "Parts: %lld, %@ fetched" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Parts: %1$lld, %2$@ fetched"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parça sayısı: %lld, %@ alındı"
           }
         }
       }
@@ -1791,6 +1791,56 @@
         }
       }
     },
+    "There are no active downloads." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etkin indirme yok."
+          }
+        }
+      }
+    },
+    "There are no completed downloads." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamamlanmış indirme yok."
+          }
+        }
+      }
+    },
+    "There are no downloads in the category “%@”." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” kategorisinde indirme yok."
+          }
+        }
+      }
+    },
+    "There are no downloads." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme yok."
+          }
+        }
+      }
+    },
+    "There are no failed downloads." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başarısız indirme yok."
+          }
+        }
+      }
+    },
     "There were no http or https links in what you opened or dropped." : {
       "localizations" : {
         "tr" : {
@@ -1957,6 +2007,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sha256:… veya md5:…"
+          }
+        }
+      }
+    },
+    "“%@” is not a header. Write each one as Name: value." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” bir başlık değil. Her birini Ad: değer biçiminde yazın."
           }
         }
       }

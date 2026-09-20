@@ -19,6 +19,18 @@ enum SidebarItem: Hashable, Identifiable {
         }
     }
 
+    /// What the list says when this filter matches nothing while other downloads exist. Whole sentences: one built
+    /// around a category's name ("No applications downloads.") reads badly and cannot be translated properly.
+    var emptyMessage: String {
+        switch self {
+        case .all: String(localized: "There are no downloads.")
+        case .active: String(localized: "There are no active downloads.")
+        case .completed: String(localized: "There are no completed downloads.")
+        case .failed: String(localized: "There are no failed downloads.")
+        case .category(let category): String(localized: "There are no downloads in the category “\(category.title)”.")
+        }
+    }
+
     var symbol: String {
         switch self {
         case .all: "tray.full"

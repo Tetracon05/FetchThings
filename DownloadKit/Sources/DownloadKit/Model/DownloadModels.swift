@@ -209,6 +209,9 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
     public var speedLimit: Int64?
     public var checksumVerified: Bool?
     public var finalURL: URL?
+    /// The order downloads were added in (counts up). Records created within the same millisecond share a
+    /// `createdAt`, and job files keep only milliseconds, so this is what puts a batch back in order.
+    public var sequence: Int
 
     public init(
         id: DownloadID = UUID(),
@@ -228,7 +231,8 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
         completedAt: Date? = nil,
         speedLimit: Int64? = nil,
         checksumVerified: Bool? = nil,
-        finalURL: URL? = nil
+        finalURL: URL? = nil,
+        sequence: Int = 0
     ) {
         self.id = id
         self.url = url
@@ -248,6 +252,7 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
         self.speedLimit = speedLimit
         self.checksumVerified = checksumVerified
         self.finalURL = finalURL
+        self.sequence = sequence
     }
 
     /// 0...1, or `nil` when the total size is unknown.

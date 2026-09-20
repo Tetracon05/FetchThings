@@ -34,6 +34,7 @@
 		6E9DA2423A5E21E651297CC9 /* EngineIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560B011ED7C7D1CDB172A4D0 /* EngineIntegrationTests.swift */; };
 		6FADB82177A01CD9E1C00258 /* EventInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE864EF4B877CFD5F0885C9 /* EventInbox.swift */; };
 		804914646E6597673F0369E4 /* DownloadTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520A6C4F38C5856CB7502DD6 /* DownloadTable.swift */; };
+		85DDAB7B4B74882FE01D6969 /* PasteDetection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0125A05212868E9A1538B1DF /* PasteDetection.swift */; };
 		8B72770413DDB9E04D8B0620 /* SidebarItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2392EEBB4AAD62EB3C24E023 /* SidebarItem.swift */; };
 		989DB9750D9A7A02B5BB9242 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACFE49D41E1203633A328CF8 /* AppSettings.swift */; };
 		9AFF2BB4B1D71DED3926AA6D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9FDDFF328BE0A9791A43369 /* Assets.xcassets */; };
@@ -51,6 +52,7 @@
 		D87FFCC6C743DA4D99B7B037 /* FetchThingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784AA914168DC986E573B743 /* FetchThingsApp.swift */; };
 		DD102F12DFA16A363A1D536D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358F3698426331EF5C9A3C88 /* AppDelegate.swift */; };
 		E2F3407276ECE7D2590CE578 /* SpeedModePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12F63DDADBE884BF3A96ABD /* SpeedModePicker.swift */; };
+		E4BF15675FA7735BE5F2670C /* PasteDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3CE879A82915746FBD50E7 /* PasteDetectionTests.swift */; };
 		EBD17E4DFC398E1001AE1088 /* FileThumbnailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D581296FE3527B95A313B2C9 /* FileThumbnailTests.swift */; };
 		F906C9112DC43C98F82934C5 /* ReviewRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD525CD3DE246257158CAFF /* ReviewRegressionTests.swift */; };
 		F9A2FF33B1EE06F5381D9F53 /* FileCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD67FFF8978363F0718A70B8 /* FileCategory.swift */; };
@@ -67,9 +69,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0125A05212868E9A1538B1DF /* PasteDetection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDetection.swift; sourceTree = "<group>"; };
 		09EEE19BAD0D3DB868F70719 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		0CCAF3A2071C5638D21E34AC /* URL+Display.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+Display.swift"; sourceTree = "<group>"; };
 		1758CBF8706E03D48EDC7BDE /* TinyHTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TinyHTTPServer.swift; sourceTree = "<group>"; };
+		1A3CE879A82915746FBD50E7 /* PasteDetectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteDetectionTests.swift; sourceTree = "<group>"; };
 		2392EEBB4AAD62EB3C24E023 /* SidebarItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarItem.swift; sourceTree = "<group>"; };
 		28EAB12B909EE5EEAB893BF2 /* FetchThingsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FetchThingsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E51498307E5C6523B6788F8 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -213,6 +217,7 @@
 				4F33DB9FEBD568F09B6A339B /* IncomingLinks.swift */,
 				A83D89388C66084C7CEA7C6F /* LinkSummary.swift */,
 				C43F440D049DCCF96B420CF0 /* OwnDrag.swift */,
+				0125A05212868E9A1538B1DF /* PasteDetection.swift */,
 				D50021465371F6190062D2E6 /* PendingRemoval.swift */,
 				2392EEBB4AAD62EB3C24E023 /* SidebarItem.swift */,
 				AD60ED26CA40FAED1C0F6A7D /* SnapshotDisplay.swift */,
@@ -250,6 +255,7 @@
 				D581296FE3527B95A313B2C9 /* FileThumbnailTests.swift */,
 				654ABB27B8ACD49F6796DF87 /* KeychainSecretStoreTests.swift */,
 				43ADD5B4365B19FD703796C0 /* ModelLogicTests.swift */,
+				1A3CE879A82915746FBD50E7 /* PasteDetectionTests.swift */,
 				FDD525CD3DE246257158CAFF /* ReviewRegressionTests.swift */,
 				94A8B34876B6CD5FE5DCDAFA /* TestSupport.swift */,
 				1758CBF8706E03D48EDC7BDE /* TinyHTTPServer.swift */,
@@ -363,6 +369,7 @@
 				EBD17E4DFC398E1001AE1088 /* FileThumbnailTests.swift in Sources */,
 				5A6C77CCA527014406917E34 /* KeychainSecretStoreTests.swift in Sources */,
 				2120DDE03ABB3D2F0C9E1E0D /* ModelLogicTests.swift in Sources */,
+				E4BF15675FA7735BE5F2670C /* PasteDetectionTests.swift in Sources */,
 				F906C9112DC43C98F82934C5 /* ReviewRegressionTests.swift in Sources */,
 				4985D700B241754DA252B37D /* TestSupport.swift in Sources */,
 				D744B94496CF4A1A55D2D1CC /* TinyHTTPServer.swift in Sources */,
@@ -395,6 +402,7 @@
 				4C0B16ABE86B2B3ACC872D0C /* LinkSummary.swift in Sources */,
 				6D71B10A2918EE3D41AECFD9 /* MainView.swift in Sources */,
 				206790C31FC27FB4ED4A2951 /* OwnDrag.swift in Sources */,
+				85DDAB7B4B74882FE01D6969 /* PasteDetection.swift in Sources */,
 				A6D5362F02604C4E1CFD0ED2 /* Pasteboard.swift in Sources */,
 				0090036B576DB2B9127A627B /* PendingRemoval.swift in Sources */,
 				4224F9BA3D47B2F1E85ECEC6 /* QuickLookController.swift in Sources */,

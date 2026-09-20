@@ -33,6 +33,8 @@ final class AppModel {
     var isSearchFocused = false
 
     var showAddSheet = false
+    /// A remark for the Add sheet to show under its links field (see `report`); the sheet takes it and clears it.
+    var sheetNote: String?
     var draft: AddDraft
     var alert: AlertMessage?
     var pendingRemoval: PendingRemoval?
@@ -151,8 +153,13 @@ final class AppModel {
                     || download.displayName.localizedCaseInsensitiveContains(query)
                     || download.url.absoluteString.localizedCaseInsensitiveContains(query))
         }
-        // The tiebreakers keep equal rows in a stable order between refreshes.
-        let tiebreakers = [KeyPathComparator(\DownloadSnapshot.createdAt, order: .reverse), KeyPathComparator(\DownloadSnapshot.id.uuidString)]
+        // The tiebreakers keep equal rows in a stable order between refreshes. A batch added together can share a
+        // `createdAt` (job files keep milliseconds), so the order they were added in comes before the id.
+        let tiebreakers = [
+            KeyPathComparator(\DownloadSnapshot.createdAt, order: .reverse),
+            KeyPathComparator(\DownloadSnapshot.sequence, order: .reverse),
+            KeyPathComparator(\DownloadSnapshot.id.uuidString),
+        ]
         visibleDownloads = filtered.sorted(using: sortOrder + tiebreakers)
 
         let visibleIDs = Set(visibleDownloads.map(\.id))
@@ -317,6 +324,13 @@ final class AppModel {
     /// the disk the way `quickLookItems` does.
     var canQuickLookSelection: Bool { selectedDownloads.contains { $0.state == .completed && $0.finalURL != nil } }
 
+    /// Makes `ids` the selection unless they are already part of it.
+    func selectIfNeeded(_ ids: Set<DownloadID>) {
+        guard !ids.isSubset(of: selection) else { return }
+        let visible = Set(visibleDownloads.map(\.id))
+        selection = ids.intersection(visible)
+    }
+
     /// Moves a single selection up or down the list, as the arrow keys do, and stops at either end.
     func moveSelection(by offset: Int) {
         guard selection.count == 1, let only = selection.first,
@@ -343,7 +357,8 @@ final class AppModel {
                 outcome.added += 1
             } catch {
                 outcome.failedLinks.append(request.url)
-                outcome.failures.append("\(request.url.absoluteString): \(error.localizedDescription)")
+                // Never the password of a `user:pass@` link: this text is shown, and can be selected and copied.
+                outcome.failures.append("\(request.url.withoutCredentials.absoluteString): \(error.localizedDescription)")
             }
         }
         return outcome
@@ -351,13 +366,13 @@ final class AppModel {
 
     /// Opens the Add sheet with `links` filled in. If the sheet is already open, they are appended.
     func presentAddSheet(links: [URL] = []) {
-        let text = links.map(\.absoluteString).joined(separator: "\n")
         log.info("Showing the Add sheet with \(links.count, privacy: .public) link(s); nothing is added until confirmed")
         if showAddSheet {
-            if !text.isEmpty { draft.linksText += (draft.linksText.isEmpty || draft.linksText.hasSuffix("\n") ? "" : "\n") + text }
+            // Links from outside join the ones the user is looking at, but do not get the cookies and login they typed.
+            draft.append(links, fromOutside: true)
         } else {
             resetDraft()
-            draft.linksText = text
+            draft.append(links)
             showAddSheet = true
         }
     }
@@ -376,9 +391,9 @@ final class AppModel {
             log.info("Received \(urls.count, privacy: .public) item(s) from the system, \(resolution.links.count, privacy: .public) link(s) found")
             if !resolution.links.isEmpty { presentAddSheet(links: resolution.links) }
             if let problem = resolution.problems.first {
-                alert = AlertMessage(title: resolution.links.isEmpty ? String(localized: "No Links Found") : String(localized: "Some Items Were Skipped"), message: problem)
+                report(title: resolution.links.isEmpty ? String(localized: "No Links Found") : String(localized: "Some Items Were Skipped"), message: problem)
             } else if resolution.links.isEmpty {
-                alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "There were no http or https links in what you opened or dropped."))
+                report(title: String(localized: "No Links Found"), message: String(localized: "There were no http or https links in what you opened or dropped."))
             }
         }
     }
@@ -387,9 +402,19 @@ final class AppModel {
     func handleText(_ text: String) {
         let links = LinkParser.urls(in: text)
         if links.isEmpty {
-            alert = AlertMessage(title: String(localized: "No Links Found"), message: String(localized: "The text doesn’t contain an http or https link."))
+            report(title: String(localized: "No Links Found"), message: String(localized: "The text doesn’t contain an http or https link."))
         } else {
             presentAddSheet(links: links)
+        }
+    }
+
+    /// Tells the user that what they dropped or pasted held nothing to add. While the Add sheet is up an alert would sit
+    /// on the window behind it and only appear once the sheet closes, so the sheet shows the remark itself.
+    private func report(title: String, message: String) {
+        if showAddSheet {
+            sheetNote = message
+        } else {
+            alert = AlertMessage(title: title, message: message)
         }
     }
 
@@ -397,7 +422,7 @@ final class AppModel {
         Task {
             let links = await pasteboard.links()
             if links.isEmpty {
-                alert = AlertMessage(title: String(localized: "No Links on the Clipboard"), message: String(localized: "Copy an http or https link first."))
+                report(title: String(localized: "No Links on the Clipboard"), message: String(localized: "Copy an http or https link first."))
             } else {
                 presentAddSheet(links: links)
             }

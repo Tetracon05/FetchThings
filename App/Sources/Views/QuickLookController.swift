@@ -98,7 +98,9 @@ extension QuickLookController: @preconcurrency QLPreviewPanelDelegate {
     /// The arrow keys, while the panel is the key window: with one file showing they move the selection in the list
     /// (as Finder's list does); with several the panel pages through them itself.
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
-        guard event.type == .keyDown, items.count == 1, let model else { return false }
+        // One file showing *and* one row selected: with a wider selection the arrows have no row to move (and the
+        // panel must not swallow them for nothing).
+        guard event.type == .keyDown, items.count == 1, let model, model.selection.count == 1 else { return false }
         let offset: Int
         switch event.keyCode {
         case 126, 123: offset = -1 // up, left

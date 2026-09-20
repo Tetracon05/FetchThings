@@ -192,7 +192,8 @@ struct DownloadSecurityTests {
         let done = await waitForCompletion(manager, record.id)
 
         #expect(done.state == .failed)
-        #expect(done.failure?.contains("Unsafe destination") == true, "\(done.failure ?? "")")
+        let prefix = try #require(DownloadError.unsafeDestination("").errorDescription) // localized, so not spelled out here
+        #expect(done.failure?.hasPrefix(prefix) == true, "\(done.failure ?? "")")
         #expect(!FileManager.default.fileExists(atPath: env.root.appending(path: "escaped.bin").path))
         #expect(!FileManager.default.fileExists(atPath: env.root.appending(path: "escaped.bin.part").path))
     }

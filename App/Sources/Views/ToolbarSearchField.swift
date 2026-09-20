@@ -61,7 +61,9 @@ struct ToolbarSearchField: View {
         .padding(.horizontal, 12)
         .frame(width: width, height: 34)
         .glassSurface(.capsule)
-        .onChange(of: focusRequested) { _, requested in
+        // `initial`: a request made while the field was not on screen (the toolbar had moved it into its overflow menu)
+        // is still there when it comes back, and would otherwise never be seen, so ⌘F would stay dead.
+        .onChange(of: focusRequested, initial: true) { _, requested in
             guard requested else { return }
             isFocused = true
             Self.focusFieldInWindow()

@@ -5,9 +5,7 @@ extension DownloadSnapshot {
     /// The best name available before, during and after the download.
     var displayName: String {
         if let filename, !filename.isEmpty { return filename }
-        let last = url.lastPathComponent
-        if !last.isEmpty, last != "/" { return last }
-        return url.host(percentEncoded: false) ?? url.absoluteString
+        return url.displayFileName
     }
 
     var category: FileCategory { FileCategory.classify(filename: filename ?? displayName) }

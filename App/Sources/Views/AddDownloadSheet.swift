@@ -41,6 +41,12 @@ struct AddDownloadSheet: View {
         .animation(.smooth(duration: 0.3), value: model.draft.links)
         .animation(.smooth(duration: 0.3), value: errorText)
         .task(id: model.draft.folder) { freeSpace = Self.freeSpaceText(at: model.draft.folder) }
+        // What was dropped on the sheet held no links: say so here, where the user is looking.
+        .onChange(of: model.sheetNote) { _, text in
+            guard let text else { return }
+            note(text)
+            model.sheetNote = nil
+        }
         .background(ParentHeightReader { parentHeight = $0 })
     }
 
@@ -131,8 +137,8 @@ struct AddDownloadSheet: View {
                     .focused($linksFocused)
                     .padding(.top, 3)
                     .onChange(of: pending) { old, new in
-                        // A paste arrives in one go (more than a typed character), and Option-Return adds a line break.
-                        if new.count - old.count > 1 || new.contains(where: \.isNewline) { commitPending() }
+                        // A paste brings a whole address in one go, and Option-Return adds a line break.
+                        if PasteDetection.looksLikePaste(from: old, to: new) { commitPending() }
                     }
                     .onSubmit(submitField)
                     .accessibilityLabel("Links to download")
@@ -161,7 +167,7 @@ struct AddDownloadSheet: View {
             .animation(.smooth(duration: 0.2), value: linksFocused)
             .onDrop(of: [.url, .plainText], delegate: IncomingDropDelegate(model: model, isTargeted: $isDropTargeted))
 
-            Text(pasteNote ?? String(localized: "Press Return to add a link, and Return again to start the downloads."))
+            Text(pasteNote ?? outsideNote ?? String(localized: "Press Return to add a link, and Return again to start the downloads."))
                 .font(.caption)
                 .foregroundStyle(pasteNote == nil ? Color.secondary : Color.orange)
                 .padding(.horizontal, 8)
@@ -212,10 +218,16 @@ struct AddDownloadSheet: View {
     private func submitField() {
         if commitPending() { return }
         if pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if readyCount > 0 { add() }
+            if readyCount > 0, !isAdding { add() }
         } else {
             note(String(localized: "That doesn’t look like an http or https link."))
         }
+    }
+
+    /// Said under the well while a link that came from outside sits beside cookies or a login: it will not get them.
+    private var outsideNote: String? {
+        guard model.draft.hasSecrets, !model.draft.linksWithoutSecrets.isEmpty else { return nil }
+        return String(localized: "Links that came from outside this window are sent without the cookies, headers or login you entered.")
     }
 
     /// How many downloads Add would make: the cards, plus a link that is typed but not yet entered.
@@ -462,6 +474,7 @@ struct AddDownloadSheet: View {
                 .keyboardShortcut(.cancelAction)
                 .glassButton()
                 .controlSize(.large)
+                .disabled(isAdding) // adding cannot be taken back: Cancel would only close the sheet over it
             Button(action: add) {
                 Label(addTitle, systemImage: "arrow.down.circle.fill")
                     .font(.body.weight(.semibold))
@@ -492,6 +505,7 @@ struct AddDownloadSheet: View {
     // MARK: Adding
 
     private func add() {
+        guard !isAdding else { return } // Return in the field is not disabled like the buttons are
         commitPending() // a link typed but not yet entered still counts
         errorText = nil
         let requests: [NewDownload]
@@ -504,10 +518,10 @@ struct AddDownloadSheet: View {
         isAdding = true
         Task {
             let outcome = await model.add(requests)
-            isAdding = false
             if outcome.failures.isEmpty {
-                dismiss()
+                dismiss() // isAdding stays set: the sheet is still on screen while it closes, and a Return then must not add again
             } else {
+                isAdding = false
                 // Keep only what failed, so adding again cannot duplicate what went through.
                 model.draft.linksText = outcome.failedLinks.map(\.absoluteString).joined(separator: "\n")
                 errorText = outcome.failures.joined(separator: "\n")

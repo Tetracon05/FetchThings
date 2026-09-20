@@ -72,7 +72,8 @@ struct AddDraftTests {
         #expect(throws: AddDraftError.invalidChecksum) { try badChecksum.makeRequests() }
         var badHeader = draft(); badHeader.headersText = "no colon here"
         #expect(throws: AddDraftError.invalidHeaderLine("no colon here")) { try badHeader.makeRequests() }
-        #expect(AddDraftError.invalidHeaderLine("x").errorDescription?.contains("Name: value") == true)
+        let line = "x" // the wording is localized: compare with the same call
+        #expect(AddDraftError.invalidHeaderLine(line).errorDescription == String(localized: "“\(line)” is not a header. Write each one as Name: value."))
     }
 
     @Test func secretsGoIntoTheSensitiveOptions() throws {
@@ -167,5 +168,80 @@ struct AddDraftTests {
         let secret = LinkSummary(URL(string: "https://alice:hunter2@example.com/private.iso")!)
         #expect(secret.host == "example.com")
         #expect(!secret.displayName.contains("hunter2") && !secret.host.contains("hunter2") && !secret.host.contains("alice"))
+    }
+
+    // MARK: Links from outside
+
+    @Test func linksFromOutsideAreSentWithoutTheSheetsSecrets() throws {
+        var d = draft("https://mine.example/a.zip")
+        d.cookies = "session=abc"
+        d.headersText = "X-Token: t"
+        d.username = "alice"
+        d.password = "pw"
+        d.append([URL(string: "https://evil.example/x.zip")!], fromOutside: true)
+
+        let requests = try d.makeRequests()
+        let mine = try #require(requests.first { $0.url.host() == "mine.example" })
+        let theirs = try #require(requests.first { $0.url.host() == "evil.example" })
+        #expect(mine.sensitive.cookies == "session=abc" && mine.sensitive.headers["X-Token"] == "t" && mine.sensitive.basicAuth != nil)
+        #expect(theirs.sensitive.isEmpty, "a link proposed from outside must not borrow what was typed for another site")
+        #expect(d.hasSecrets && d.linksWithoutSecrets.count == 1)
+    }
+
+    @Test func aLinkTheUserAddsThemselvesGetsTheirSecretsEvenIfItCameFromOutsideFirst() throws {
+        var d = draft("https://mine.example/a.zip")
+        d.cookies = "session=abc"
+        let link = URL(string: "https://other.example/b.zip")!
+        d.append([link], fromOutside: true)
+        d.append([link]) // pasted by the user: it is theirs now
+        let request = try #require(try d.makeRequests().first { $0.url.host() == "other.example" })
+        #expect(request.sensitive.cookies == "session=abc")
+
+        var removed = draft("https://mine.example/a.zip")
+        removed.append([link], fromOutside: true)
+        removed.remove(link)
+        removed.append([link]) // and a link taken out and put back is theirs too
+        #expect(removed.linksWithoutSecrets.isEmpty)
+    }
+
+    @Test func aLinkAlreadyInTheListStaysTheUsersWhenItComesAgainFromOutside() throws {
+        var d = draft("https://mine.example/a.zip")
+        d.cookies = "session=abc"
+        d.append([URL(string: "https://mine.example/a.zip")!], fromOutside: true)
+        #expect(d.linksWithoutSecrets.isEmpty)
+        #expect(try d.makeRequests().first?.sensitive.cookies == "session=abc")
+    }
+
+    @Test func thePlainHTTPWarningIgnoresLinksThatGetNoLogin() {
+        var d = draft("https://mine.example/a.zip")
+        d.username = "alice"
+        d.append([URL(string: "http://outside.example/x")!], fromOutside: true)
+        #expect(!d.sendsCredentialsOverPlainHTTP, "the login is not sent to that link, so there is nothing to warn about")
+        d.append([URL(string: "http://outside.example/x")!])
+        #expect(d.sendsCredentialsOverPlainHTTP)
+    }
+
+    // MARK: Names
+
+    @Test func aLinkNameIsDecodedOnceAndCannotSpoofItsExtension() {
+        // `URL` has already decoded the last component: a second decode turned `a%2541.txt` into `aA.txt`.
+        #expect(LinkSummary(URL(string: "https://h.example/a%2541.txt")!).displayName == "a%41.txt")
+        #expect(LinkSummary(URL(string: "https://h.example/50%2520off.zip")!).displayName == "50%20off.zip")
+        #expect(LinkSummary(URL(string: "https://h.example/some%20folder/My%20Movie.mkv")!).displayName == "My Movie.mkv")
+
+        // A right-to-left override would show `invoice<exe.pdf` for the file `invoice.exe`.
+        let spoof = LinkSummary(URL(string: "https://evil.example/invoice%E2%80%AEfdp.exe")!).displayName
+        #expect(!spoof.unicodeScalars.contains("\u{202E}") && spoof.hasSuffix(".exe"))
+
+        // The table shows the same name before the probe has found one.
+        let row = snapshot(url: "https://h.example/a%2541.txt")
+        #expect(row.displayName == "a%41.txt")
+    }
+
+    @Test func aFailureMessageNeverCarriesAPassword() {
+        let secret = URL(string: "https://alice:hunter2@host.example/f.iso")!
+        #expect(secret.withoutCredentials.absoluteString == "https://host.example/f.iso")
+        let plain = URL(string: "https://host.example/f.iso?x=1")!
+        #expect(plain.withoutCredentials == plain)
     }
 }

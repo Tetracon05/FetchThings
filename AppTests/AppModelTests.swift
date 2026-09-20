@@ -288,6 +288,40 @@ struct AppModelTests {
         await model.shutdown()
     }
 
+    @Test func aRightClickedRowThatIsNotSelectedBecomesTheSelection() async {
+        let ctx = makeModel()
+        let a = snapshot("a", created: 3), b = snapshot("b", created: 2), c = snapshot("c", created: 1)
+        #expect(await started(3, [a, b, c], ctx))
+        let model = ctx.model
+        let order = model.visibleDownloads.map(\.id)
+
+        model.selection = [order[0]]
+        model.selectIfNeeded([order[2]])
+        #expect(model.selection == [order[2]], "Quick Look from a menu on another row must preview that row")
+
+        model.selection = [order[0], order[1]]
+        model.selectIfNeeded([order[1]])
+        #expect(model.selection == [order[0], order[1]], "a row inside the selection leaves it as it is")
+        model.selectIfNeeded([UUID()])
+        #expect(model.selection.isSubset(of: Set(order)), "an id that is not in the list never joins the selection")
+        await model.shutdown()
+    }
+
+    @Test func aBatchAddedTogetherKeepsItsOrderEvenWhenItsTimesTie() async {
+        let ctx = makeModel()
+        // Job files keep milliseconds, so a batch can share a createdAt; the order they were added in decides.
+        let first = snapshot("first", created: 5, sequence: 1), second = snapshot("second", created: 5, sequence: 2), third = snapshot("third", created: 5, sequence: 3)
+        #expect(await started(3, [second, first, third], ctx))
+        #expect(ctx.model.visibleDownloads.map(\.sequence) == [3, 2, 1], "newest first, like createdAt")
+        await ctx.model.shutdown()
+    }
+
+    @Test func everyFilterHasItsOwnWholeSentenceForWhenItIsEmpty() {
+        let messages = SidebarItem.downloadItems.map(\.emptyMessage) + SidebarItem.categoryItems.map(\.emptyMessage)
+        #expect(Set(messages).count == messages.count && !messages.contains(""))
+        #expect(SidebarItem.category(.applications).emptyMessage.contains(FileCategory.applications.title), "a category is named in it")
+    }
+
     // MARK: Actions
 
     @Test func pauseResumeAndRetryOnlyTouchWhatTheyApplyTo() async {
@@ -355,6 +389,40 @@ struct AppModelTests {
         ctx.model.presentAddSheet(links: [URL(string: "https://example.com/b")!])
         #expect(ctx.model.draft.links.map(\.absoluteString) == ["https://example.com/a", "https://example.com/b"])
         #expect(ctx.model.draft.startPaused, "appending must not reset what the user typed")
+    }
+
+    @Test func linksThatArriveWhileTheSheetIsOpenDoNotGetTheSheetsSecrets() throws {
+        let ctx = makeModel()
+        ctx.model.presentAddSheet(links: [URL(string: "https://mine.example/a")!])
+        ctx.model.draft.cookies = "session=abc" // typed by the user for their own link
+        ctx.model.presentAddSheet(links: [URL(string: "https://evil.example/x")!]) // a fetchthings:// link, say
+
+        let requests = try ctx.model.draft.makeRequests()
+        #expect(requests.first { $0.url.host() == "mine.example" }?.sensitive.cookies == "session=abc")
+        #expect(requests.first { $0.url.host() == "evil.example" }?.sensitive.isEmpty == true)
+    }
+
+    @Test func nothingToAddInADropOnTheOpenSheetIsSaidInTheSheetNotInAnAlertBehindIt() {
+        let ctx = makeModel()
+        ctx.model.presentAddSheet(links: [URL(string: "https://example.com/a")!])
+        ctx.model.handleText("no links in here")
+        #expect(ctx.model.sheetNote != nil, "the sheet shows it")
+        #expect(ctx.model.alert == nil, "an alert on the window under the sheet would wait until the sheet closed")
+
+        let closed = makeModel()
+        closed.model.handleText("no links in here")
+        #expect(closed.model.alert != nil && closed.model.sheetNote == nil)
+    }
+
+    @Test func aFailedAddNeverShowsTheLinksPassword() async {
+        let ctx = makeModel()
+        await ctx.engine.failAdds(forHost: "host.example")
+        let link = URL(string: "https://alice:hunter2@host.example/f.iso")!
+        let outcome = await ctx.model.add([NewDownload(url: link, destinationDirectory: URL(filePath: "/tmp/dl", directoryHint: .isDirectory))])
+        #expect(outcome.failures.count == 1)
+        #expect(outcome.failures.first?.contains("hunter2") == false && outcome.failures.first?.contains("alice") == false)
+        #expect(outcome.failures.first?.contains("host.example/f.iso") == true, "the link is still named, so the user knows which failed")
+        #expect(outcome.failedLinks == [link], "the link kept for a retry is untouched")
     }
 
     @Test func aFreshSheetStartsFromDefaultsNotFromTheLastOne() {

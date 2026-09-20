@@ -11,8 +11,13 @@ extension View {
         if #available(macOS 26.0, *) {
             glassEffect(Self.glass(tint: tint, interactive: interactive), in: shape)
         } else {
-            background(.regularMaterial, in: shape)
-                .overlay { if let tint { shape.fill(tint.opacity(0.25)) } }
+            // The tint goes behind the content: as an overlay it sat in front of the buttons inside the surface and
+            // swallowed their clicks. It is drawn at the strength the caller chose for glass, so a white glyph or dark
+            // ink chosen for a strongly tinted surface stays readable.
+            background {
+                shape.fill(.regularMaterial)
+                if let tint { shape.fill(tint) }
+            }
         }
     }
 

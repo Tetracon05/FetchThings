@@ -130,6 +130,29 @@ struct RetryPolicyTests {
         #expect(p.delay(forAttempt: 1, retryAfter: 100_000, randomUnit: 0.5) == p.maxRetryAfter)
     }
 
+    @Test func waitingNoticesALimitThatIsRaisedWhileItWaits() async throws {
+        let limiter = RateLimiter(bytesPerSecond: 100)
+        _ = limiter.reserve(1_000) // about 10 s of debt at 100 B/s
+        let started = ContinuousClock.now
+        let waiter = Task { try await limiter.waitUntilClear(step: 0.05) }
+        try await Task.sleep(for: .milliseconds(150))
+        limiter.setRate(nil) // the user picks the unlimited speed mode
+        try await waiter.value
+        #expect(ContinuousClock.now - started < .seconds(3), "a slot must not sleep out a debt the limit no longer creates")
+    }
+
+    @Test func waitingReturnsAtOnceWithoutDebtAndStopsWhenCancelled() async throws {
+        let free = RateLimiter(bytesPerSecond: nil)
+        try await free.waitUntilClear()
+
+        let limiter = RateLimiter(bytesPerSecond: 1)
+        _ = limiter.reserve(100_000)
+        let waiter = Task { try await limiter.waitUntilClear(step: 0.05) }
+        try await Task.sleep(for: .milliseconds(100))
+        waiter.cancel()
+        await #expect(throws: CancellationError.self) { try await waiter.value }
+    }
+
     @Test func classifiesErrors() {
         #expect(DownloadError.httpStatus(503, retryAfter: nil).isRetryable)
         #expect(DownloadError.httpStatus(429, retryAfter: 5).isRetryable)
