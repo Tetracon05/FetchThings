@@ -123,6 +123,11 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Equatable {
     /// Recorded so that secrets which cannot be read later fail the download instead of silently
     /// downloading without them. (Optional so job files written before this field existed still load.)
     public var hasSecrets: Bool?
+    /// `nil` is normal priority. (Optional, with `queueRank`, so job files written before the queue could be reordered
+    /// still load: they run in the order they were added. See `effectivePriority` and `effectiveRank`.)
+    public var priority: DownloadPriority?
+    /// The place in the queue within the priority; `nil` is the order added. See `QueueOrder`.
+    public var queueRank: Double?
 
     public init(
         id: DownloadID = UUID(),
@@ -212,6 +217,9 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
     /// The order downloads were added in (counts up). Records created within the same millisecond share a
     /// `createdAt`, and job files keep only milliseconds, so this is what puts a batch back in order.
     public var sequence: Int
+    public var priority: DownloadPriority
+    /// The place in the queue within the priority (see `QueueOrder`); the order added until the queue is reordered.
+    public var queueRank: Double
 
     public init(
         id: DownloadID = UUID(),
@@ -232,7 +240,9 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
         speedLimit: Int64? = nil,
         checksumVerified: Bool? = nil,
         finalURL: URL? = nil,
-        sequence: Int = 0
+        sequence: Int = 0,
+        priority: DownloadPriority = .normal,
+        queueRank: Double? = nil
     ) {
         self.id = id
         self.url = url
@@ -253,6 +263,8 @@ public struct DownloadSnapshot: Sendable, Identifiable, Equatable {
         self.checksumVerified = checksumVerified
         self.finalURL = finalURL
         self.sequence = sequence
+        self.priority = priority
+        self.queueRank = queueRank ?? Double(sequence)
     }
 
     /// 0...1, or `nil` when the total size is unknown.

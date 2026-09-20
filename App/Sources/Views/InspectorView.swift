@@ -94,6 +94,10 @@ private struct DetailForm: View {
                 }
 
                 InsetGroup(title: Text("Details")) {
+                    if let position = model.queuePositions[download.id] {
+                        DetailRow(Text("Queue Position"), value: "\(position)")
+                        DetailRow(Text("Priority"), value: download.priority.title)
+                    }
                     DetailRow(Text("Added"), value: download.createdAt.formatted(date: .abbreviated, time: .shortened))
                     if let completed = download.completedAt {
                         DetailRow(Text("Completed"), value: completed.formatted(date: .abbreviated, time: .shortened))

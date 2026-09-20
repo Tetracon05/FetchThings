@@ -56,6 +56,16 @@ targets:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleTypeRole: Viewer
             CFBundleURLSchemes: [fetchthings]
+        # The type a row carries when it is dragged to a new place in the queue (`QueueDrag`). A table only accepts a drop
+        # of a type that is declared: an undeclared identifier never matched, so nothing was ever dropped. Built from the
+        # bundle id, like `QueueDrag.identifier` and `OwnDrag.identifier`, so a real id needs no change here.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER).queue-item
+            UTTypeDescription: A download's place in the queue
+            UTTypeConformsTo: [public.data]
+          - UTTypeIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER).internal-drag
+            UTTypeDescription: A drag that started in the app
+            UTTypeConformsTo: [public.data]
         # Lets text files of links be dropped on the Dock icon or opened with the app.
         CFBundleDocumentTypes:
           - CFBundleTypeName: Text Document
