@@ -70,6 +70,27 @@ private struct NetworkSettings: View {
         @Bindable var settings = model.settings
         VStack(spacing: 18) {
             TileSection(
+                title: Text("Connection"),
+                footer: Text("When the Mac is offline, downloads wait and continue by themselves.")
+            ) {
+                SettingTile(
+                    symbol: "personalhotspot", tint: .indigo, title: Text("Pause on a Personal Hotspot or cellular"),
+                    detail: Text("Downloads wait unless you choose Download Anyway.")
+                ) {
+                    Toggle("Pause on a Personal Hotspot or cellular", isOn: $settings.pauseOnExpensiveNetwork)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+                SettingTile(
+                    symbol: "leaf.fill", tint: .green, title: Text("Respect Low Data Mode"),
+                    detail: Text("Downloads wait on a network that is in Low Data Mode.")
+                ) {
+                    Toggle("Respect Low Data Mode", isOn: $settings.pauseOnConstrainedNetwork)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
+            TileSection(
                 title: Text("Speed modes"),
                 footer: Text("Choose a mode with the button at the bottom of the sidebar. It limits all downloads together. The limit is approximate for small files: the first part of a download can arrive before it takes hold.")
             ) {
@@ -87,6 +108,8 @@ private struct NetworkSettings: View {
             }
         }
         .padding(.vertical, 8)
+        .onChange(of: settings.pauseOnExpensiveNetwork) { Task { await model.applyEngineSettings() } }
+        .onChange(of: settings.pauseOnConstrainedNetwork) { Task { await model.applyEngineSettings() } }
     }
 
     private func modeTile(_ mode: SpeedMode, limit: Binding<Int>) -> some View {

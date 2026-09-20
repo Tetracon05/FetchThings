@@ -32,6 +32,9 @@ final class AppModel {
     /// A one-shot request to focus the search field in the toolbar (⌘F); the main view acts on it and resets it.
     var isSearchFocused = false
 
+    /// The connection, and whether the engine is holding downloads back because of it (see `NetworkPolicy`).
+    private(set) var network = NetworkState.unrestricted
+
     var showAddSheet = false
     /// A remark for the Add sheet to show under its links field (see `report`); the sheet takes it and clears it.
     var sheetNote: String?
@@ -77,6 +80,9 @@ final class AppModel {
             for await event in await engine.events() { inbox.put(event) }
         })
         tasks.append(Task { [weak self] in
+            for await state in await engine.networkStates() { self?.network = state }
+        })
+        tasks.append(Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(200))
                 self?.flushEvents()
@@ -105,6 +111,7 @@ final class AppModel {
 
     func applyEngineSettings() async {
         await engine.setMaxConcurrentDownloads(settings.maxConcurrentDownloads)
+        await engine.setNetworkPolicy(settings.networkPolicy)
         let limit = settings.globalSpeedLimit
         log.info("Speed mode \(self.settings.speedMode.rawValue, privacy: .public): limit \(limit.map { "\($0) B/s" } ?? "none", privacy: .public)")
         await engine.setGlobalSpeedLimit(limit)
@@ -118,6 +125,25 @@ final class AppModel {
     }
 
     // MARK: Events
+
+    /// Why downloads that are waiting are not starting, when some are waiting because of the connection: what the
+    /// banner under the toolbar reports. `nil` when nothing waits for it, so a Mac that is simply offline with an empty
+    /// list says nothing.
+    var networkBanner: NetworkBlock? {
+        guard let block = network.block, downloads.values.contains(where: { $0.state == .queued }) else { return nil }
+        return block
+    }
+
+    /// The download's status as the list shows it: a queued download says why it is not starting when the connection
+    /// is the reason.
+    func statusText(of download: DownloadSnapshot) -> String {
+        download.state == .queued && network.block != nil ? String(localized: "Waiting for network") : download.statusText
+    }
+
+    /// "Download Anyway" on the banner: use the expensive or constrained connection until the connection changes.
+    func downloadAnyway() {
+        Task { await engine.overrideNetworkBlock() }
+    }
 
     /// Applies everything received since the last call. Only the newest event per download matters.
     func flushEvents() {

@@ -23,10 +23,20 @@ public actor DownloadManager {
     private var activity: NSObjectProtocol?
     private var isShutDown = false
 
-    public init(configuration: EngineConfiguration = .init(), store: any JobStore, secrets: any SecretStore) {
+    private let network: (any NetworkMonitoring)?
+    private var networkStatus = NetworkStatus.online
+    private var networkPolicy = NetworkPolicy()
+    /// The user chose to download anyway on an expensive or constrained connection; lasts until the connection changes.
+    private var networkOverridden = false
+    private var networkTask: Task<Void, Never>?
+    private var networkSubscribers: [UUID: AsyncStream<NetworkState>.Continuation] = [:]
+
+    /// `network` is watched once `load()` has run; without one, downloads are never held back for the connection.
+    public init(configuration: EngineConfiguration = .init(), store: any JobStore, secrets: any SecretStore, network: (any NetworkMonitoring)? = nil) {
         self.configuration = configuration
         self.store = store
         self.secrets = secrets
+        self.network = network
     }
 
     // MARK: Lifecycle
@@ -47,6 +57,15 @@ public actor DownloadManager {
             snapshots[record.id] = await job.snapshot()
             broadcast(.snapshot(snapshots[record.id]!))
         }
+        // Read the connection before anything starts: downloads that were running at the last quit resume the moment they
+        // are queued, and starting them offline just to stop them again would be wasted, noisy work.
+        if let network, networkTask == nil {
+            networkStatus = await network.currentStatus()
+            publishNetworkState()
+            networkTask = Task { [weak self] in
+                for await status in network.changes() { await self?.networkStatusChanged(status) }
+            }
+        }
         await scheduleNext()
     }
 
@@ -55,6 +74,10 @@ public actor DownloadManager {
     /// soon as its slot freed.
     public func shutdown() async {
         isShutDown = true
+        networkTask?.cancel()
+        networkTask = nil
+        for continuation in networkSubscribers.values { continuation.finish() }
+        networkSubscribers.removeAll()
         for id in Array(runningIDs) {
             await jobs[id]?.stop(to: .queued)
         }
@@ -160,6 +183,71 @@ public actor DownloadManager {
         await jobs[id]?.setSpeedLimit(bytesPerSecond)
     }
 
+    // MARK: Network
+
+    /// Which connections downloads may use. Applies at once: running downloads that the new policy forbids wait in the
+    /// queue, and queued ones start if it now allows them.
+    public func setNetworkPolicy(_ policy: NetworkPolicy) async {
+        guard policy != networkPolicy else { return }
+        networkPolicy = policy
+        networkOverridden = false
+        await applyNetworkGate()
+    }
+
+    /// Lets downloads use an expensive or constrained connection until the connection changes. Does nothing offline.
+    public func overrideNetworkBlock() async {
+        guard networkBlock != nil, networkStatus.isConnected else { return }
+        networkOverridden = true
+        await applyNetworkGate()
+    }
+
+    /// The connection and whether it is holding downloads back: the current state first, then each change.
+    public func networkStates() -> AsyncStream<NetworkState> {
+        let token = UUID()
+        let (stream, continuation) = AsyncStream<NetworkState>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        continuation.yield(networkState)
+        networkSubscribers[token] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeNetworkSubscriber(token) }
+        }
+        return stream
+    }
+
+    private func removeNetworkSubscriber(_ token: UUID) { networkSubscribers[token] = nil }
+
+    /// Why downloads may not start now, or `nil`. Being offline blocks whatever the user chose.
+    private var networkBlock: NetworkBlock? {
+        guard networkStatus.isConnected else { return .offline }
+        return networkOverridden ? nil : networkPolicy.block(for: networkStatus)
+    }
+
+    private var networkState: NetworkState {
+        NetworkState(status: networkStatus, block: networkBlock, isOverridden: networkOverridden && networkStatus.isConnected)
+    }
+
+    private func publishNetworkState() {
+        let state = networkState
+        for continuation in networkSubscribers.values { continuation.yield(state) }
+    }
+
+    private func networkStatusChanged(_ status: NetworkStatus) async {
+        guard status != networkStatus, !isShutDown else { return }
+        networkStatus = status
+        networkOverridden = false // a different connection: the choice made for the last one does not carry over
+        await applyNetworkGate()
+    }
+
+    /// Puts running downloads back in the queue when the connection forbids them (they keep their progress, and the
+    /// ones the user paused stay paused), and starts queued ones when it no longer does.
+    private func applyNetworkGate() async {
+        publishNetworkState()
+        if networkBlock != nil {
+            for id in Array(runningIDs) { await jobs[id]?.stop(to: .queued) }
+        } else {
+            await scheduleNext()
+        }
+    }
+
     // MARK: Observing
 
     public func snapshot(_ id: DownloadID) -> DownloadSnapshot? { snapshots[id] }
@@ -235,7 +323,7 @@ public actor DownloadManager {
     }
 
     private func scheduleNext() async {
-        while !isShutDown, runningIDs.count < configuration.maxConcurrentDownloads {
+        while !isShutDown, networkBlock == nil, runningIDs.count < configuration.maxConcurrentDownloads {
             let candidate = snapshots.values
                 .filter { $0.state == .queued && !runningIDs.contains($0.id) }
                 .min { $0.sequence < $1.sequence }

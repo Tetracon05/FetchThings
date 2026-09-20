@@ -30,6 +30,7 @@
 		5B297DBB5A427E772210E527 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E51498307E5C6523B6788F8 /* AppModelTests.swift */; };
 		6284751E0B784373D57F65AE /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC2CE27948530D3C32CDD84 /* AppEnvironment.swift */; };
 		6899DA815431C3346BE08FDC /* AddDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51D3693FD1549B85739C6AE0 /* AddDraftTests.swift */; };
+		6955D3221809C956821E6723 /* FileNetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEFF28208437ADCA70AF0A55 /* FileNetworkMonitor.swift */; };
 		6D71B10A2918EE3D41AECFD9 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56FD5DC356C71B19BE70AD0D /* MainView.swift */; };
 		6E9DA2423A5E21E651297CC9 /* EngineIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560B011ED7C7D1CDB172A4D0 /* EngineIntegrationTests.swift */; };
 		6FADB82177A01CD9E1C00258 /* EventInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DE864EF4B877CFD5F0885C9 /* EventInbox.swift */; };
@@ -120,6 +121,7 @@
 		E9FDDFF328BE0A9791A43369 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F856CA9AFBF8FCDEB67C7D17 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		FDD525CD3DE246257158CAFF /* ReviewRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRegressionTests.swift; sourceTree = "<group>"; };
+		FEFF28208437ADCA70AF0A55 /* FileNetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNetworkMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -240,6 +242,7 @@
 			isa = PBXGroup;
 			children = (
 				ABC2CE27948530D3C32CDD84 /* AppEnvironment.swift */,
+				FEFF28208437ADCA70AF0A55 /* FileNetworkMonitor.swift */,
 				51D74F2AFED34D9993189A47 /* KeychainSecretStore.swift */,
 				484B1DE97AA62C75B0954FC0 /* Pasteboard.swift */,
 			);
@@ -392,6 +395,7 @@
 				6FADB82177A01CD9E1C00258 /* EventInbox.swift in Sources */,
 				D87FFCC6C743DA4D99B7B037 /* FetchThingsApp.swift in Sources */,
 				F9A2FF33B1EE06F5381D9F53 /* FileCategory.swift in Sources */,
+				6955D3221809C956821E6723 /* FileNetworkMonitor.swift in Sources */,
 				03E64DC83E657016D7D735AF /* FilePreview.swift in Sources */,
 				2A53590073EB35F3AA67EE3B /* Glass.swift in Sources */,
 				3A07BBA39FBAA0DC6E68E843 /* GlassComponents.swift in Sources */,

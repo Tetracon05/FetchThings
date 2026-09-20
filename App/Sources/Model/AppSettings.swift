@@ -1,3 +1,4 @@
+import DownloadKit
 import Foundation
 import Observation
 
@@ -47,6 +48,11 @@ final class AppSettings {
             defaults.set(normalLimitKBps, forKey: Key.normalLimit)
         }
     }
+    /// Keep downloads off a Personal Hotspot or cellular connection (which may be metered). Off: most people who tether
+    /// do so to download.
+    var pauseOnExpensiveNetwork: Bool { didSet { defaults.set(pauseOnExpensiveNetwork, forKey: Key.pauseExpensive) } }
+    /// Keep downloads off a network that is in Low Data Mode, which is the system's way of asking apps to spare it. On.
+    var pauseOnConstrainedNetwork: Bool { didSet { defaults.set(pauseOnConstrainedNetwork, forKey: Key.pauseConstrained) } }
     /// Off by default: watching the clipboard is opt-in.
     var detectClipboard: Bool { didSet { defaults.set(detectClipboard, forKey: Key.clipboard) } }
     var defaultUserAgent: String { didSet { defaults.set(defaultUserAgent, forKey: Key.userAgent) } }
@@ -60,6 +66,8 @@ final class AppSettings {
         static let speedMode = "speedMode"
         static let lowLimit = "lowLimitKBps"
         static let normalLimit = "normalLimitKBps"
+        static let pauseExpensive = "pauseOnExpensiveNetwork"
+        static let pauseConstrained = "pauseOnConstrainedNetwork"
         static let clipboard = "detectClipboard"
         static let userAgent = "defaultUserAgent"
     }
@@ -75,6 +83,8 @@ final class AppSettings {
         speedMode = defaults.string(forKey: Key.speedMode).flatMap(SpeedMode.init(rawValue:)) ?? .high
         lowLimitKBps = Self.limit(defaults.object(forKey: Key.lowLimit) as? Int, default: SpeedMode.defaultLowKBps)
         normalLimitKBps = Self.limit(defaults.object(forKey: Key.normalLimit) as? Int, default: SpeedMode.defaultNormalKBps)
+        pauseOnExpensiveNetwork = defaults.bool(forKey: Key.pauseExpensive)
+        pauseOnConstrainedNetwork = defaults.object(forKey: Key.pauseConstrained) as? Bool ?? true
         detectClipboard = defaults.bool(forKey: Key.clipboard)
         defaultUserAgent = defaults.string(forKey: Key.userAgent) ?? ""
     }
@@ -86,6 +96,11 @@ final class AppSettings {
         case .normal: normalLimitKBps
         case .high: 0
         }
+    }
+
+    /// Which connections downloads may use.
+    var networkPolicy: NetworkPolicy {
+        NetworkPolicy(pauseOnExpensive: pauseOnExpensiveNetwork, pauseOnConstrained: pauseOnConstrainedNetwork)
     }
 
     /// The global limit in bytes per second, `nil` when unlimited.

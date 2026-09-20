@@ -42,9 +42,9 @@ struct DownloadTable: View {
             .width(min: 70, ideal: 90)
 
             TableColumn("Status", value: \.statusSortKey) { download in
-                StatusCell(download: download)
+                StatusCell(download: download, text: model.statusText(of: download))
             }
-            .width(min: 90, ideal: 110)
+            .width(min: 90, ideal: 140) // "Waiting for network" must fit
         } rows: {
             ForEach(model.visibleDownloads) { download in
                 // A finished file can be dragged out of the list into Finder or any app that takes files; with several
@@ -227,14 +227,16 @@ struct ProgressBar: View {
 
 private struct StatusCell: View {
     let download: DownloadSnapshot
+    /// What the row says: the state's name, or that it waits for the network.
+    let text: String
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
-        Text(download.statusText)
+        Text(text)
             .foregroundStyle(style)
             .fontWeight(download.state == .failed && prominence == .increased ? .semibold : .regular)
-            .help(download.failure ?? download.statusText)
-            .accessibilityValue(download.failure.map { "\(download.statusText). \($0)" } ?? download.statusText)
+            .help(download.failure ?? text)
+            .accessibilityValue(download.failure.map { "\(text). \($0)" } ?? text)
     }
 
     /// Red on the blue selection is hard to read, so a selected failed row switches to bold white.

@@ -9,8 +9,17 @@ actor FakeEngine: DownloadEngine {
     private var continuation: AsyncStream<DownloadEvent>.Continuation?
     var addError: (any Error)?
     var failingHosts: Set<String> = []
+    /// What the model told the engine about the network (kept apart from `calls`, whose exact order tests check).
+    private(set) var networkPolicies: [NetworkPolicy] = []
+    private(set) var networkOverrides = 0
+    private var networkContinuation: AsyncStream<NetworkState>.Continuation?
+    /// Whether `load` came after the policy was set: the launch must know the policy before it starts anything.
+    private(set) var policySetBeforeLoad = false
 
-    func load() async throws { calls.append("load") }
+    func load() async throws {
+        policySetBeforeLoad = !networkPolicies.isEmpty
+        calls.append("load")
+    }
     func shutdown() async { calls.append("shutdown"); continuation?.finish() }
 
     func events() async -> AsyncStream<DownloadEvent> {
@@ -33,6 +42,18 @@ actor FakeEngine: DownloadEngine {
     func remove(_ id: DownloadID, deleteFiles: Bool) async { calls.append("remove \(id) deleteFiles=\(deleteFiles)") }
     func setMaxConcurrentDownloads(_ count: Int) async { calls.append("maxConcurrent \(count)") }
     func setGlobalSpeedLimit(_ bytesPerSecond: Int64?) async { calls.append("globalLimit \(bytesPerSecond.map(String.init) ?? "nil")") }
+
+    func setNetworkPolicy(_ policy: NetworkPolicy) async { networkPolicies.append(policy) }
+    func overrideNetworkBlock() async { networkOverrides += 1 }
+
+    func networkStates() async -> AsyncStream<NetworkState> {
+        let (stream, continuation) = AsyncStream<NetworkState>.makeStream()
+        networkContinuation = continuation
+        continuation.yield(.unrestricted)
+        return stream
+    }
+
+    func sendNetwork(_ state: NetworkState) { networkContinuation?.yield(state) }
 
     func send(_ event: DownloadEvent) { continuation?.yield(event) }
     func failAdds(forHost host: String) { failingHosts.insert(host) }

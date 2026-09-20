@@ -14,6 +14,11 @@ protocol DownloadEngine: Sendable {
     func remove(_ id: DownloadID, deleteFiles: Bool) async
     func setMaxConcurrentDownloads(_ count: Int) async
     func setGlobalSpeedLimit(_ bytesPerSecond: Int64?) async
+    func setNetworkPolicy(_ policy: NetworkPolicy) async
+    /// Lets downloads use an expensive or constrained connection until the connection changes.
+    func overrideNetworkBlock() async
+    /// The connection and whether it holds downloads back: the current state first, then each change.
+    func networkStates() async -> AsyncStream<NetworkState>
 }
 
 extension DownloadManager: DownloadEngine {}
