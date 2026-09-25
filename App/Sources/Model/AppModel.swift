@@ -22,9 +22,12 @@ final class AppModel {
 
     var sidebarSelection: SidebarItem = .all { didSet { recomputeVisible() } }
     var searchText = "" { didSet { recomputeVisible() } }
-    var sortOrder: [KeyPathComparator<DownloadSnapshot>] = [KeyPathComparator(\.createdAt, order: .reverse)] {
+    /// By the queue unless the user picks another column: top to bottom is the order downloads run in.
+    var sortOrder: [KeyPathComparator<DownloadSnapshot>] = [KeyPathComparator(\.queueSortKey)] {
         didSet { recomputeVisible() }
     }
+    /// The place of each download that is not finished in the queue, from 1: what the "#" column shows.
+    private(set) var queuePositions: [DownloadID: Int] = [:]
     /// Always a subset of `visibleDownloads`: a row that is filtered out is deselected, so no action can
     /// reach a download the user cannot see.
     var selection: Set<DownloadID> = []
@@ -190,6 +193,10 @@ final class AppModel {
 
         let visibleIDs = Set(visibleDownloads.map(\.id))
         if !selection.isSubset(of: visibleIDs) { selection.formIntersection(visibleIDs) }
+
+        let positions = downloads.values.filter { $0.state != .completed }.sorted { $0.queueOrder < $1.queueOrder }
+            .enumerated().reduce(into: [DownloadID: Int]()) { $0[$1.element.id] = $1.offset + 1 }
+        if positions != queuePositions { queuePositions = positions }
     }
 
     // MARK: Derived state
@@ -286,6 +293,62 @@ final class AppModel {
         }
     }
 
+    // MARK: Queue
+
+    /// Whether the list is sorted by the queue, top to bottom. Only then can rows be dragged to reorder: in any other
+    /// sort, where a row is dropped says nothing about where it goes in the queue.
+    var isQueueOrdered: Bool {
+        guard let first = sortOrder.first else { return false }
+        return first.keyPath == \DownloadSnapshot.queueSortKey as PartialKeyPath<DownloadSnapshot> && first.order == .forward
+    }
+
+    /// The downloads among `ids` that still have a place in the queue (not finished), in on-screen order.
+    private func queueable(_ ids: Set<DownloadID>) -> [DownloadID] {
+        ordered(ids).filter { $0.state != .completed }.map(\.id)
+    }
+
+    var canReorderSelection: Bool { !queueable(selection).isEmpty }
+
+    /// The one priority all of `ids` have, or `nil` when they differ (or none has a place in the queue).
+    func priority(of ids: Set<DownloadID>) -> DownloadPriority? {
+        let priorities = Set(ordered(ids).filter { $0.state != .completed }.map(\.priority))
+        return priorities.count == 1 ? priorities.first : nil
+    }
+
+    func moveToTop(_ ids: Set<DownloadID>) {
+        let list = queueable(ids)
+        guard !list.isEmpty else { return }
+        Task { await engine.moveToTop(list) }
+    }
+
+    func moveToBottom(_ ids: Set<DownloadID>) {
+        let list = queueable(ids)
+        guard !list.isEmpty else { return }
+        Task { await engine.moveToBottom(list) }
+    }
+
+    func setPriority(_ priority: DownloadPriority, for ids: Set<DownloadID>) {
+        let list = queueable(ids)
+        guard !list.isEmpty else { return }
+        Task { await engine.setPriority(priority, for: list) }
+    }
+
+    /// Rows were dropped between two rows of the list: put those downloads in front of the download now at `row` (at the
+    /// end of the queue when the drop is after the last row).
+    func dropInQueue(_ providers: [NSItemProvider], atRow row: Int) {
+        guard isQueueOrdered else { return }
+        // Worked out now: the list can change while the providers are read.
+        let target = visibleDownloads.indices.contains(row) ? visibleDownloads[row].id : nil
+        Task {
+            var ids: [DownloadID] = []
+            for provider in providers {
+                if let id = await QueueDrag.id(from: provider) { ids.append(id) }
+            }
+            guard !ids.isEmpty else { return }
+            await engine.move(ids, before: target)
+        }
+    }
+
     /// The visible downloads among `ids`, in on-screen order.
     private func ordered(_ ids: Set<DownloadID>) -> [DownloadSnapshot] {
         visibleDownloads.filter { ids.contains($0.id) }
@@ -325,7 +388,10 @@ final class AppModel {
     /// receiver read a copy). Whichever is used, SwiftUI clones the file into `~/Library/Caches/com.apple.SwiftUI.Drag-*`
     /// for the receiver to read: instant and free on APFS, but the clone is left behind afterwards.
     func dragProvider(for download: DownloadSnapshot) -> NSItemProvider? {
-        availableFile(of: download).map { url in
+        // A download that is not finished has no file to hand over: dragging it reorders the queue (when the list is
+        // in queue order, so that where it is dropped means something).
+        if download.state != .completed { return isQueueOrdered ? QueueDrag.provider(for: download.id) : nil }
+        return availableFile(of: download).map { url in
             let provider = NSItemProvider(object: url as NSURL)
             // Only this process sees the mark, so the window can refuse the drag when it is dropped back on it.
             provider.registerDataRepresentation(forTypeIdentifier: OwnDrag.identifier, visibility: .ownProcess) { completion in

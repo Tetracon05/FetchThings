@@ -97,6 +97,13 @@ actor DownloadJob {
         await publish(persist: true)
     }
 
+    /// Where this download stands in the queue (see `QueueOrder`); the manager decides, the job keeps it.
+    func setQueueing(priority: DownloadPriority, rank: Double) async {
+        record.priority = priority == .normal ? nil : priority
+        record.queueRank = rank
+        await publish(persist: true)
+    }
+
     func setSpeedLimit(_ bytesPerSecond: Int64?) async {
         record.options.speedLimit = bytesPerSecond
         ownLimiter.setRate(bytesPerSecond)
@@ -145,7 +152,9 @@ actor DownloadJob {
             speedLimit: record.options.speedLimit,
             checksumVerified: record.checksumVerified,
             finalURL: record.state == .completed ? record.finalURL : nil,
-            sequence: record.sequence
+            sequence: record.sequence,
+            priority: record.effectivePriority,
+            queueRank: record.effectiveRank
         )
     }
 

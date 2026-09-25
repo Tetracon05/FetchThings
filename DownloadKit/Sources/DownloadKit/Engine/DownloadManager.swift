@@ -183,6 +183,74 @@ public actor DownloadManager {
         await jobs[id]?.setSpeedLimit(bytesPerSecond)
     }
 
+    // MARK: Queue order
+
+    /// The downloads that still have a place in the queue (everything not finished), in the order they will run.
+    private func queue() -> [DownloadSnapshot] {
+        snapshots.values.filter { $0.state != .completed }.sorted { $0.queueOrder < $1.queueOrder }
+    }
+
+    /// Changes how soon downloads run compared with others: a higher priority always starts first. Running downloads
+    /// are not interrupted; the change decides which queued one gets the next free slot.
+    public func setPriority(_ priority: DownloadPriority, for ids: [DownloadID]) async {
+        for id in ids {
+            guard let snapshot = snapshots[id], snapshot.state != .completed, snapshot.priority != priority else { continue }
+            await jobs[id]?.setQueueing(priority: priority, rank: snapshot.queueRank)
+        }
+        await scheduleNext()
+    }
+
+    /// Puts `ids` (in the order they already have) in front of `target`, or at the end of the queue when `target` is
+    /// `nil` or not in the queue. If `target` is one of `ids` they go in front of the next download that is not (so
+    /// dropping a selection on one of its own rows changes nothing). They take the priority of the place they are put
+    /// in: dropped among high-priority downloads they become high priority, at the end of the queue they take the
+    /// priority of what is last.
+    public func move(_ ids: [DownloadID], before target: DownloadID?) async {
+        let wanted = Set(ids)
+        let queue = queue()
+        let moved = queue.filter { wanted.contains($0.id) }
+        guard !moved.isEmpty else { return }
+        let rest = queue.filter { !wanted.contains($0.id) }
+
+        var anchor = target
+        if let target, wanted.contains(target), let index = queue.firstIndex(where: { $0.id == target }) {
+            anchor = queue[(index + 1)...].first { !wanted.contains($0.id) }?.id
+        }
+        let insertAt = anchor.flatMap { anchor in rest.firstIndex { $0.id == anchor } } ?? rest.count
+        let priority = rest.indices.contains(insertAt) ? rest[insertAt].priority : (rest.last?.priority ?? moved[0].priority)
+        let low = insertAt > 0 && rest[insertAt - 1].priority == priority ? rest[insertAt - 1].queueRank : nil
+        let high = rest.indices.contains(insertAt) ? rest[insertAt].queueRank : nil
+
+        guard let ranks = QueueRanks.spread(moved.count, between: low, and: high) else {
+            await renumberQueue() // no room between the neighbours any more
+            return await move(ids, before: target)
+        }
+        for (snapshot, rank) in zip(moved, ranks) where snapshot.priority != priority || snapshot.queueRank != rank {
+            await jobs[snapshot.id]?.setQueueing(priority: priority, rank: rank)
+        }
+        await scheduleNext()
+    }
+
+    /// Puts `ids` first in the queue.
+    public func moveToTop(_ ids: [DownloadID]) async {
+        let wanted = Set(ids)
+        guard let first = queue().first(where: { !wanted.contains($0.id) }) else { return }
+        await move(ids, before: first.id)
+    }
+
+    /// Puts `ids` last in the queue.
+    public func moveToBottom(_ ids: [DownloadID]) async {
+        await move(ids, before: nil)
+    }
+
+    /// Gives every queued download a whole-number rank again, keeping the order. Needed only when so many downloads
+    /// have been put between the same two that there is no number left between them.
+    private func renumberQueue() async {
+        for (index, snapshot) in queue().enumerated() where snapshot.queueRank != Double(index) {
+            await jobs[snapshot.id]?.setQueueing(priority: snapshot.priority, rank: Double(index))
+        }
+    }
+
     // MARK: Network
 
     /// Which connections downloads may use. Applies at once: running downloads that the new policy forbids wait in the
@@ -326,7 +394,7 @@ public actor DownloadManager {
         while !isShutDown, networkBlock == nil, runningIDs.count < configuration.maxConcurrentDownloads {
             let candidate = snapshots.values
                 .filter { $0.state == .queued && !runningIDs.contains($0.id) }
-                .min { $0.sequence < $1.sequence }
+                .min { $0.queueOrder < $1.queueOrder }
             guard let candidate, let job = jobs[candidate.id] else { break }
             runningIDs.insert(candidate.id)
             if await !job.start() {

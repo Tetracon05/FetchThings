@@ -31,6 +31,15 @@ struct DownloadCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(!model.canResumeSelection)
             Divider()
+            Button("Move to Top") { model.moveToTop(model.selection) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(!model.canReorderSelection)
+            Button("Move to Bottom") { model.moveToBottom(model.selection) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(!model.canReorderSelection)
+            PriorityMenu(model: model, ids: model.selection)
+                .disabled(!model.canReorderSelection)
+            Divider()
             Button("Pause All") { model.pauseAll() }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             Button("Resume All") { model.resumeAll() }

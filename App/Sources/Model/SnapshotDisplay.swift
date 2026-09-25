@@ -8,6 +8,12 @@ extension DownloadSnapshot {
         return url.displayFileName
     }
 
+    /// Where the download stands in the list when it is sorted by the queue: what runs next first, finished downloads
+    /// after them (the one finished last on top).
+    var queueSortKey: QueueSortKey {
+        QueueSortKey(isFinished: state == .completed, order: queueOrder, finishedAt: completedAt ?? createdAt)
+    }
+
     /// The finished file's address; nil until the download has completed. (The engine only reports a `finalURL` for a
     /// completed download, so the state check only guards a snapshot built by hand.)
     var completedFileURL: URL? { state == .completed ? finalURL : nil }
@@ -34,6 +40,38 @@ extension DownloadSnapshot {
     var progressSortKey: Double { fraction ?? -1 }
     var etaSortKey: Double { eta ?? .infinity }
     var statusSortKey: Int { DownloadState.allCases.firstIndex(of: state) ?? 0 }
+}
+
+/// The queue as a column to sort by: unfinished downloads in the order they will run, then the finished ones.
+struct QueueSortKey: Comparable {
+    var isFinished: Bool
+    var order: QueueOrder
+    var finishedAt: Date
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        if lhs.isFinished != rhs.isFinished { return !lhs.isFinished }
+        if lhs.isFinished, lhs.finishedAt != rhs.finishedAt { return lhs.finishedAt > rhs.finishedAt }
+        return lhs.order < rhs.order
+    }
+}
+
+extension DownloadPriority {
+    var title: String {
+        switch self {
+        case .high: String(localized: "High")
+        case .normal: String(localized: "Normal")
+        case .low: String(localized: "Low")
+        }
+    }
+
+    /// A small mark for the list: none for normal.
+    var symbol: String? {
+        switch self {
+        case .high: "chevron.up.2"
+        case .normal: nil
+        case .low: "chevron.down"
+        }
+    }
 }
 
 /// Display strings. `FormatStyle`s are used throughout because they are value types and thread-safe.

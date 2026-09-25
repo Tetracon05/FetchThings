@@ -2,6 +2,9 @@
   "sourceLanguage" : "en",
   "strings" : {
     "" : {},
+    "#" : {
+      "shouldTranslate" : false
+    },
     "%@ KB/s" : {
       "localizations" : {
         "tr" : {
@@ -205,6 +208,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Panoda %lld bağlantı var, ilki: %@"
+          }
+        }
+      }
+    },
+    "%lld, %@ priority" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld, %2$@ priority"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld, %@ öncelik"
           }
         }
       }
@@ -1105,6 +1124,26 @@
         }
       }
     },
+    "Move to Bottom" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Alta Taşı"
+          }
+        }
+      }
+    },
+    "Move to Top" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En Üste Taşı"
+          }
+        }
+      }
+    },
     "Name" : {
       "localizations" : {
         "tr" : {
@@ -1401,12 +1440,32 @@
         }
       }
     },
+    "Priority" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öncelik"
+          }
+        }
+      }
+    },
     "Progress" : {
       "localizations" : {
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "İlerleme"
+          }
+        }
+      }
+    },
+    "Queue Position" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sıra Konumu"
           }
         }
       }

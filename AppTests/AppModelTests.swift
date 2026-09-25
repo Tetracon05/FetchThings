@@ -199,8 +199,12 @@ struct AppModelTests {
         // The drag carries the file itself, as a file URL (what Finder and other apps accept).
         let provider = try #require(model.dragProvider(for: done))
         #expect(provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier))
-        #expect(model.dragProvider(for: running) == nil)
-        #expect(model.dragProvider(for: moved) == nil)
+        // A download that is not finished has no file to hand over, so dragging it can only reorder the queue: it carries
+        // its place in the queue and no file address.
+        let queued = try #require(model.dragProvider(for: running))
+        #expect(queued.hasItemConformingToTypeIdentifier(QueueDrag.identifier))
+        #expect(!queued.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier))
+        #expect(model.dragProvider(for: moved) == nil, "a finished file that is gone has nothing to drag")
         await model.shutdown()
     }
 
@@ -315,8 +319,111 @@ struct AppModelTests {
         // Job files keep milliseconds, so a batch can share a createdAt; the order they were added in decides.
         let first = snapshot("first", created: 5, sequence: 1), second = snapshot("second", created: 5, sequence: 2), third = snapshot("third", created: 5, sequence: 3)
         #expect(await started(3, [second, first, third], ctx))
+        ctx.model.sortOrder = [KeyPathComparator(\.createdAt, order: .reverse)] // by date added, newest first
         #expect(ctx.model.visibleDownloads.map(\.sequence) == [3, 2, 1], "newest first, like createdAt")
+        ctx.model.sortOrder = [KeyPathComparator(\.queueSortKey)]
+        #expect(ctx.model.visibleDownloads.map(\.sequence) == [1, 2, 3], "and by the queue, the order they run in")
         await ctx.model.shutdown()
+    }
+
+    // MARK: The queue
+
+    @Test func theListIsInQueueOrderByDefaultWithFinishedDownloadsAfterTheQueue() async {
+        let ctx = makeModel()
+        // Added a, b, c, d in that order; d was moved to the top, b is high priority, a finished first, c last.
+        let a = snapshot("a", state: .completed, created: 1, sequence: 1, completedAt: 100)
+        let b = snapshot("b", created: 2, sequence: 2, priority: .high)
+        let c = snapshot("c", state: .completed, created: 3, sequence: 3, completedAt: 300)
+        let d = snapshot("d", created: 4, sequence: 4, rank: -1)
+        let e = snapshot("e", created: 5, sequence: 5)
+        #expect(await started(5, [a, b, c, d, e], ctx))
+        #expect(ctx.model.isQueueOrdered)
+        #expect(ctx.model.visibleDownloads.map(\.displayName) == ["b", "d", "e", "c", "a"], "the queue first (a high priority ahead), then what finished last")
+        #expect(ctx.model.queuePositions == [b.id: 1, d.id: 2, e.id: 3], "finished downloads have no place")
+        await ctx.model.shutdown()
+    }
+
+    @Test func sortingByAnotherColumnLeavesTheQueueOrderAndTurnsDraggingOff() async {
+        let ctx = makeModel()
+        let a = snapshot("a", state: .queued, sequence: 1), b = snapshot("b", state: .queued, sequence: 2)
+        #expect(await started(2, [a, b], ctx))
+        #expect(ctx.model.dragProvider(for: a) != nil, "queued rows can be dragged to reorder")
+        ctx.model.sortOrder = [KeyPathComparator(\.displayName)]
+        #expect(!ctx.model.isQueueOrdered)
+        #expect(ctx.model.dragProvider(for: a) == nil, "in another sort, where a row is dropped says nothing about the queue")
+        ctx.model.sortOrder = [KeyPathComparator(\.queueSortKey, order: .reverse)]
+        #expect(!ctx.model.isQueueOrdered, "and neither does the queue upside down")
+        await ctx.model.shutdown()
+    }
+
+    @Test func theQueueCommandsAskTheEngineOnlyAboutDownloadsThatAreNotFinished() async {
+        let ctx = makeModel()
+        let a = snapshot("a", sequence: 1), done = snapshot("done", state: .completed, sequence: 2, completedAt: 5), b = snapshot("b", sequence: 3)
+        #expect(await started(3, [a, done, b], ctx))
+        let model = ctx.model
+        model.selection = [done.id]
+        #expect(!model.canReorderSelection)
+        model.moveToTop(model.selection)
+        model.setPriority(.high, for: model.selection)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await ctx.engine.queueCalls.isEmpty, "a finished download has no place in the queue")
+
+        model.selection = [done.id, b.id, a.id]
+        #expect(model.canReorderSelection)
+        model.moveToTop(model.selection)
+        model.moveToBottom([b.id])
+        model.setPriority(.low, for: model.selection)
+        #expect(await eventually { await ctx.engine.queueCalls.count == 3 })
+        #expect(await ctx.engine.queueCalls == ["top 2", "bottom 1", "priority -1 2"])
+        await model.shutdown()
+    }
+
+    @Test func theMenuShowsThePriorityThatAllTheSelectedShare() async {
+        let ctx = makeModel()
+        let a = snapshot("a", sequence: 1, priority: .high), b = snapshot("b", sequence: 2, priority: .high), c = snapshot("c", sequence: 3)
+        #expect(await started(3, [a, b, c], ctx))
+        #expect(ctx.model.priority(of: [a.id, b.id]) == .high)
+        #expect(ctx.model.priority(of: [a.id, c.id]) == nil, "different: no check mark")
+        #expect(ctx.model.priority(of: []) == nil)
+        await ctx.model.shutdown()
+    }
+
+    @Test func aRowDroppedBetweenTwoRowsGoesInFrontOfTheOneBelow() async throws {
+        let ctx = makeModel()
+        let a = snapshot("a", sequence: 1), b = snapshot("b", sequence: 2), c = snapshot("c", sequence: 3)
+        #expect(await started(3, [a, b, c], ctx))
+        let order = ctx.model.visibleDownloads.map(\.id)
+
+        ctx.model.dropInQueue([QueueDrag.provider(for: order[2])], atRow: 1) // between the first and second row
+        #expect(await eventually { await ctx.engine.moves.count == 1 })
+        var move = try #require(await ctx.engine.moves.last)
+        #expect(move.ids == [order[2]] && move.target == order[1], "in front of the row that was below the drop")
+
+        ctx.model.dropInQueue([QueueDrag.provider(for: order[0]), QueueDrag.provider(for: order[1])], atRow: 3) // after the last row
+        #expect(await eventually { await ctx.engine.moves.count == 2 })
+        move = try #require(await ctx.engine.moves.last)
+        #expect(move.ids == [order[0], order[1]] && move.target == nil, "after the last row: the end of the queue")
+
+        ctx.model.sortOrder = [KeyPathComparator(\.displayName)]
+        ctx.model.dropInQueue([QueueDrag.provider(for: order[2])], atRow: 0)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(await ctx.engine.moves.count == 2, "a drop in a list that is not in queue order does nothing")
+        await ctx.model.shutdown()
+    }
+
+    @Test func aDraggedRowCarriesItsIdOnlyInsideTheAppAndTheMarkThatKeepsTheWindowFromReadingItAsALink() async {
+        let id = UUID()
+        let provider = QueueDrag.provider(for: id)
+        #expect(await QueueDrag.id(from: provider) == id)
+        #expect(provider.hasItemConformingToTypeIdentifier(OwnDrag.identifier), "the window refuses a drag with this mark")
+        #expect(await QueueDrag.id(from: NSItemProvider(object: "just text" as NSString)) == nil)
+    }
+
+    @Test func finishedDownloadsSortAfterTheQueueNewestFirst() {
+        let unfinished = snapshot("u", sequence: 1).queueSortKey
+        let old = snapshot("o", state: .completed, sequence: 2, completedAt: 10).queueSortKey
+        let recent = snapshot("r", state: .completed, sequence: 3, completedAt: 20).queueSortKey
+        #expect([old, recent, unfinished].sorted() == [unfinished, recent, old])
     }
 
     // MARK: The network
