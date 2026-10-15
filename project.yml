@@ -36,6 +36,9 @@ targets:
     sources:
       - path: App/Sources
       - path: App/Resources
+      # The app icon: an Icon Composer document (layers + Liquid Glass), edited with Icon Composer. Xcode compiles it into
+      # the asset catalog and, because the deployment target is below macOS 26, into a flat icns for the older systems.
+      - path: FetchThings.icon
     dependencies:
       - package: DownloadKit
         product: DownloadKit
@@ -56,13 +59,9 @@ targets:
           - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
             CFBundleTypeRole: Viewer
             CFBundleURLSchemes: [fetchthings]
-        # The type a row carries when it is dragged to a new place in the queue (`QueueDrag`). A table only accepts a drop
-        # of a type that is declared: an undeclared identifier never matched, so nothing was ever dropped. Built from the
-        # bundle id, like `QueueDrag.identifier` and `OwnDrag.identifier`, so a real id needs no change here.
+        # The type a drag that starts in this app carries (`OwnDrag`), so the window can refuse it when it is dropped back
+        # on itself. Built from the bundle id, like `OwnDrag.identifier`, so a real id needs no change here.
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER).queue-item
-            UTTypeDescription: A download's place in the queue
-            UTTypeConformsTo: [public.data]
           - UTTypeIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER).internal-drag
             UTTypeDescription: A drag that started in the app
             UTTypeConformsTo: [public.data]
@@ -88,6 +87,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.FetchThings
         PRODUCT_NAME: FetchThings
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: FetchThings
         COMBINE_HIDPI_IMAGES: YES
 
   FetchThingsTests:

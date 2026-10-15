@@ -206,6 +206,23 @@ struct SettingsTests {
         s.speedMode = .high
         #expect(s.limitKBps(for: .high) == 0 && s.globalSpeedLimit == nil)
     }
+
+    @Test func languageDefaultsToTheSystemAndOverridingItPersistsAsAppleLanguages() {
+        let d = defaults()
+        let first = AppSettings(defaults: d)
+        #expect(first.language == .system, "nothing stored yet: follow the system")
+        #expect(d.string(forKey: "language") == nil)
+
+        first.language = .turkish
+        #expect(d.string(forKey: "language") == "tr")
+        #expect(d.array(forKey: "AppleLanguages") as? [String] == ["tr"], "the real key Bundle's language resolution reads")
+        let second = AppSettings(defaults: d)
+        #expect(second.language == .turkish, "remembered across instances, like every other setting")
+
+        second.language = .system
+        #expect(d.string(forKey: "language") == nil, "back to following the system removes the override")
+        #expect(AppSettings(defaults: d).language == .system)
+    }
 }
 
 @Suite("Toolbar search field width")

@@ -10,46 +10,39 @@ struct DownloadTable: View {
 
     var body: some View {
         Table(of: DownloadSnapshot.self, selection: $model.selection, sortOrder: $model.sortOrder) {
-            // The place in the queue. Sorting by it (the default) puts the list in the order downloads run in, and only
-            // then can rows be dragged to change it.
-            TableColumn("#", value: \.queueSortKey) { download in
-                QueueCell(position: model.queuePositions[download.id], priority: download.priority)
-            }
-            .width(min: 40, ideal: 44, max: 72)
-
             TableColumn("Name", value: \.displayName) { download in
                 NameCell(download: download)
             }
-            .width(min: 180, ideal: 240)
+            .width(min: 180, ideal: 320)
 
             TableColumn("Size", value: \.sizeSortKey) { download in
                 Text(Formatters.size(download.totalBytes))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            .width(min: 70, ideal: 80)
+            .width(min: 70, ideal: 90)
 
             TableColumn("Progress", value: \.progressSortKey) { download in
-                ProgressCell(download: download)
+                ProgressCell(download: download, isMissing: model.fileIsMissing(download))
             }
-            .width(min: 130, ideal: 170)
+            .width(min: 130, ideal: 190)
 
             TableColumn("Speed", value: \.bytesPerSecond) { download in
                 Text(Formatters.speed(download.bytesPerSecond))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            .width(min: 80, ideal: 90)
+            .width(min: 80, ideal: 95)
 
             TableColumn("Time Left", value: \.etaSortKey) { download in
                 Text(Formatters.eta(download.eta))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            .width(min: 70, ideal: 80)
+            .width(min: 70, ideal: 90)
 
             TableColumn("Status", value: \.statusSortKey) { download in
-                StatusCell(download: download, text: model.statusText(of: download))
+                StatusCell(download: download, text: model.statusText(of: download), isMissing: model.fileIsMissing(download))
             }
             .width(min: 90, ideal: 140) // "Waiting for network" must fit
         } rows: {
@@ -58,8 +51,6 @@ struct DownloadTable: View {
                 // rows selected the drag carries all of them. Rows still downloading have nothing to hand over.
                 TableRow(download).itemProvider { model.dragProvider(for: download) }
             }
-            // Rows dragged to a new place in the queue land between two rows.
-            .onInsert(of: [QueueDrag.type]) { index, providers in model.dropInQueue(providers, atRow: index) }
         }
         // The stripes would run through the empty-state message and make it hard to read.
         .alternatingRowBackgrounds(model.visibleDownloads.isEmpty ? .disabled : .enabled)
@@ -127,8 +118,6 @@ struct DownloadTable: View {
             Button("Show in Finder") { model.revealInFinder(ids) }
             if targets.contains(where: { $0.state != .completed }) {
                 Divider()
-                Button("Move to Top") { model.moveToTop(ids) }
-                Button("Move to Bottom") { model.moveToBottom(ids) }
                 PriorityMenu(model: model, ids: ids)
                 Divider()
             }
@@ -173,6 +162,8 @@ private struct NameCell: View {
 
 private struct ProgressCell: View {
     let download: DownloadSnapshot
+    /// Whether the finished file is gone: the bar turns red like a failure, instead of staying green.
+    let isMissing: Bool
     /// `.increased` while the row is selected (drawn on the accent colour), where a blue bar would vanish.
     @Environment(\.backgroundProminence) private var prominence
 
@@ -198,7 +189,7 @@ private struct ProgressCell: View {
         .accessibilityValue(spoken)
     }
 
-    private var tint: Color { download.stateTint }
+    private var tint: Color { isMissing ? .red : download.stateTint }
 
     private var spoken: String {
         var parts = [Formatters.percent(download.fraction)]
@@ -241,33 +232,6 @@ struct ProgressBar: View {
     }
 }
 
-/// The "#" column: the place in the queue, with a mark for a priority that is not normal.
-private struct QueueCell: View {
-    let position: Int?
-    let priority: DownloadPriority
-
-    var body: some View {
-        HStack(spacing: 3) {
-            if let symbol = priority.symbol {
-                Image(systemName: symbol)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(priority == .high ? Color.orange : Color.secondary)
-            }
-            Text(position.map { "\($0)" } ?? "")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(position == nil ? "" : String(localized: "Queue Position"))
-        .accessibilityValue(spoken)
-    }
-
-    private var spoken: String {
-        guard let position else { return "" }
-        return priority == .normal ? "\(position)" : String(localized: "\(position), \(priority.title) priority")
-    }
-}
-
 /// The priority of the downloads it is opened for, as a submenu with a check mark on the one they share.
 struct PriorityMenu: View {
     let model: AppModel
@@ -285,21 +249,25 @@ struct PriorityMenu: View {
 
 private struct StatusCell: View {
     let download: DownloadSnapshot
-    /// What the row says: the state's name, or that it waits for the network.
+    /// What the row says: the state's name, that it waits for the network, or that the file is missing.
     let text: String
+    let isMissing: Bool
     @Environment(\.backgroundProminence) private var prominence
+
+    /// A failure and a missing file are both worth calling out the same way.
+    private var isProblem: Bool { download.state == .failed || isMissing }
 
     var body: some View {
         Text(text)
             .foregroundStyle(style)
-            .fontWeight(download.state == .failed && prominence == .increased ? .semibold : .regular)
+            .fontWeight(isProblem && prominence == .increased ? .semibold : .regular)
             .help(download.failure ?? text)
             .accessibilityValue(download.failure.map { "\(text). \($0)" } ?? text)
     }
 
-    /// Red on the blue selection is hard to read, so a selected failed row switches to bold white.
+    /// Red on the blue selection is hard to read, so a selected problem row switches to bold white.
     private var style: AnyShapeStyle {
-        guard download.state == .failed else { return AnyShapeStyle(.secondary) }
+        guard isProblem else { return AnyShapeStyle(.secondary) }
         return AnyShapeStyle(prominence == .increased ? Color.white : Color.red)
     }
 }

@@ -94,9 +94,14 @@ private struct DetailForm: View {
                 }
 
                 InsetGroup(title: Text("Details")) {
-                    if let position = model.queuePositions[download.id] {
-                        DetailRow(Text("Queue Position"), value: "\(position)")
+                    if download.state != .completed {
                         DetailRow(Text("Priority"), value: download.priority.title)
+                    }
+                    if model.fileIsMissing(download) {
+                        DetailRow(title: Text("File"), stacked: true) {
+                            Text("The file is no longer at this location.")
+                                .foregroundStyle(.red)
+                        }
                     }
                     DetailRow(Text("Added"), value: download.createdAt.formatted(date: .abbreviated, time: .shortened))
                     if let completed = download.completedAt {
@@ -137,7 +142,7 @@ private struct DetailForm: View {
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .glassSurface(.capsule, tint: download.stateTint.opacity(0.3))
+                    .glassSurface(.capsule, tint: (model.fileIsMissing(download) ? Color.red : download.stateTint).opacity(0.3))
             }
             if download.state != .completed {
                 VStack(spacing: 6) {

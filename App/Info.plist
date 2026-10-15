@@ -91,16 +91,6 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>A download's place in the queue</string>
-			<key>UTTypeIdentifier</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER).queue-item</string>
-		</dict>
-		<dict>
-			<key>UTTypeConformsTo</key>
-			<array>
-				<string>public.data</string>
-			</array>
-			<key>UTTypeDescription</key>
 			<string>A drag that started in the app</string>
 			<key>UTTypeIdentifier</key>
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER).internal-drag</string>

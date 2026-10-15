@@ -98,9 +98,8 @@ actor DownloadJob {
     }
 
     /// Where this download stands in the queue (see `QueueOrder`); the manager decides, the job keeps it.
-    func setQueueing(priority: DownloadPriority, rank: Double) async {
+    func setPriority(_ priority: DownloadPriority) async {
         record.priority = priority == .normal ? nil : priority
-        record.queueRank = rank
         await publish(persist: true)
     }
 
@@ -153,8 +152,7 @@ actor DownloadJob {
             checksumVerified: record.checksumVerified,
             finalURL: record.state == .completed ? record.finalURL : nil,
             sequence: record.sequence,
-            priority: record.effectivePriority,
-            queueRank: record.effectiveRank
+            priority: record.effectivePriority
         )
     }
 

@@ -19,15 +19,16 @@ final class AppModel {
     private(set) var downloads: [DownloadID: DownloadSnapshot] = [:]
     /// `downloads` after the sidebar filter, search and sort. Recomputed when any of them changes.
     private(set) var visibleDownloads: [DownloadSnapshot] = []
+    /// Finished downloads whose file is no longer where it was saved (moved or deleted outside the app).
+    /// Rechecked whenever events are applied, and once a second regardless, since nothing tells the engine when a
+    /// file disappears from under it.
+    private(set) var missingFiles: Set<DownloadID> = []
 
     var sidebarSelection: SidebarItem = .all { didSet { recomputeVisible() } }
     var searchText = "" { didSet { recomputeVisible() } }
-    /// By the queue unless the user picks another column: top to bottom is the order downloads run in.
-    var sortOrder: [KeyPathComparator<DownloadSnapshot>] = [KeyPathComparator(\.queueSortKey)] {
+    var sortOrder: [KeyPathComparator<DownloadSnapshot>] = [KeyPathComparator(\.createdAt, order: .reverse)] {
         didSet { recomputeVisible() }
     }
-    /// The place of each download that is not finished in the queue, from 1: what the "#" column shows.
-    private(set) var queuePositions: [DownloadID: Int] = [:]
     /// Always a subset of `visibleDownloads`: a row that is filtered out is deselected, so no action can
     /// reach a download the user cannot see.
     var selection: Set<DownloadID> = []
@@ -53,6 +54,16 @@ final class AppModel {
     @ObservationIgnored var isAppActive: () -> Bool = { NSApp?.isActive == true }
     /// Moves a finished file to the Trash. Replaceable for tests.
     @ObservationIgnored var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    /// Opens a second instance of FetchThings and quits this one, through the app's normal termination (so running
+    /// transfers are stopped the same way quitting does). Used after a setting that only applies at launch (the
+    /// language) changes. Replaceable for tests, which must never actually relaunch.
+    @ObservationIgnored var relaunch: () -> Void = {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { NSApp?.terminate(nil) }
+        }
+    }
 
     @ObservationIgnored private let inbox = EventInbox()
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -94,7 +105,9 @@ final class AppModel {
         tasks.append(Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                await self?.checkClipboard()
+                guard let self else { break }
+                await self.checkClipboard()
+                self.refreshMissingFiles()
             }
         })
     }
@@ -138,10 +151,14 @@ final class AppModel {
     }
 
     /// The download's status as the list shows it: a queued download says why it is not starting when the connection
-    /// is the reason.
+    /// is the reason, and a finished download says so when its file is gone.
     func statusText(of download: DownloadSnapshot) -> String {
-        download.state == .queued && network.block != nil ? String(localized: "Waiting for network") : download.statusText
+        if missingFiles.contains(download.id) { return String(localized: "File Missing") }
+        return download.state == .queued && network.block != nil ? String(localized: "Waiting for network") : download.statusText
     }
+
+    /// Whether a finished download's file is no longer where it was saved.
+    func fileIsMissing(_ download: DownloadSnapshot) -> Bool { missingFiles.contains(download.id) }
 
     /// "Download Anyway" on the banner: use the expensive or constrained connection until the connection changes.
     func downloadAnyway() {
@@ -164,6 +181,7 @@ final class AppModel {
         }
         refreshCounts()
         recomputeVisible()
+        refreshMissingFiles()
     }
 
     private func isNewCompletion(_ snapshot: DownloadSnapshot, previous: DownloadState?) -> Bool {
@@ -193,10 +211,6 @@ final class AppModel {
 
         let visibleIDs = Set(visibleDownloads.map(\.id))
         if !selection.isSubset(of: visibleIDs) { selection.formIntersection(visibleIDs) }
-
-        let positions = downloads.values.filter { $0.state != .completed }.sorted { $0.queueOrder < $1.queueOrder }
-            .enumerated().reduce(into: [DownloadID: Int]()) { $0[$1.element.id] = $1.offset + 1 }
-        if positions != queuePositions { queuePositions = positions }
     }
 
     // MARK: Derived state
@@ -293,21 +307,14 @@ final class AppModel {
         }
     }
 
-    // MARK: Queue
+    // MARK: Priority
 
-    /// Whether the list is sorted by the queue, top to bottom. Only then can rows be dragged to reorder: in any other
-    /// sort, where a row is dropped says nothing about where it goes in the queue.
-    var isQueueOrdered: Bool {
-        guard let first = sortOrder.first else { return false }
-        return first.keyPath == \DownloadSnapshot.queueSortKey as PartialKeyPath<DownloadSnapshot> && first.order == .forward
-    }
-
-    /// The downloads among `ids` that still have a place in the queue (not finished), in on-screen order.
-    private func queueable(_ ids: Set<DownloadID>) -> [DownloadID] {
+    /// The downloads among `ids` that priority can still apply to (not finished), in on-screen order.
+    private func priorityEligible(_ ids: Set<DownloadID>) -> [DownloadID] {
         ordered(ids).filter { $0.state != .completed }.map(\.id)
     }
 
-    var canReorderSelection: Bool { !queueable(selection).isEmpty }
+    var canChangePrioritySelection: Bool { !priorityEligible(selection).isEmpty }
 
     /// The one priority all of `ids` have, or `nil` when they differ (or none has a place in the queue).
     func priority(of ids: Set<DownloadID>) -> DownloadPriority? {
@@ -315,38 +322,10 @@ final class AppModel {
         return priorities.count == 1 ? priorities.first : nil
     }
 
-    func moveToTop(_ ids: Set<DownloadID>) {
-        let list = queueable(ids)
-        guard !list.isEmpty else { return }
-        Task { await engine.moveToTop(list) }
-    }
-
-    func moveToBottom(_ ids: Set<DownloadID>) {
-        let list = queueable(ids)
-        guard !list.isEmpty else { return }
-        Task { await engine.moveToBottom(list) }
-    }
-
     func setPriority(_ priority: DownloadPriority, for ids: Set<DownloadID>) {
-        let list = queueable(ids)
+        let list = priorityEligible(ids)
         guard !list.isEmpty else { return }
         Task { await engine.setPriority(priority, for: list) }
-    }
-
-    /// Rows were dropped between two rows of the list: put those downloads in front of the download now at `row` (at the
-    /// end of the queue when the drop is after the last row).
-    func dropInQueue(_ providers: [NSItemProvider], atRow row: Int) {
-        guard isQueueOrdered else { return }
-        // Worked out now: the list can change while the providers are read.
-        let target = visibleDownloads.indices.contains(row) ? visibleDownloads[row].id : nil
-        Task {
-            var ids: [DownloadID] = []
-            for provider in providers {
-                if let id = await QueueDrag.id(from: provider) { ids.append(id) }
-            }
-            guard !ids.isEmpty else { return }
-            await engine.move(ids, before: target)
-        }
     }
 
     /// The visible downloads among `ids`, in on-screen order.
@@ -368,7 +347,13 @@ final class AppModel {
     }
 
     func open(_ download: DownloadSnapshot) {
-        guard let url = download.completedFileURL else { return }
+        guard let url = availableFile(of: download) else {
+            alert = AlertMessage(
+                title: String(localized: "Couldn’t Open “\(download.displayName)”"),
+                message: String(localized: "The file is no longer at this location.")
+            )
+            return
+        }
         NSWorkspace.shared.open(url)
     }
 
@@ -383,14 +368,23 @@ final class AppModel {
         return url
     }
 
+    /// Rechecks which finished downloads' files are gone. Cheap (a `stat` per finished download), but still only
+    /// done when something might have changed, not on every view refresh.
+    private func refreshMissingFiles() {
+        let missing = Set(downloads.values.compactMap { download -> DownloadID? in
+            guard let url = download.completedFileURL, !FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return download.id
+        })
+        if missing != missingFiles { missingFiles = missing }
+    }
+
     /// What dragging a row out of the list hands to Finder or any other app, or nil when there is no file to hand over.
     /// It is the file's address (`NSItemProvider(contentsOf:)` would instead promise the file's contents and make the
     /// receiver read a copy). Whichever is used, SwiftUI clones the file into `~/Library/Caches/com.apple.SwiftUI.Drag-*`
     /// for the receiver to read: instant and free on APFS, but the clone is left behind afterwards.
     func dragProvider(for download: DownloadSnapshot) -> NSItemProvider? {
-        // A download that is not finished has no file to hand over: dragging it reorders the queue (when the list is
-        // in queue order, so that where it is dropped means something).
-        if download.state != .completed { return isQueueOrdered ? QueueDrag.provider(for: download.id) : nil }
+        // A download that is not finished has no file to hand over, so there is nothing to drag.
+        guard download.state == .completed else { return nil }
         return availableFile(of: download).map { url in
             let provider = NSItemProvider(object: url as NSURL)
             // Only this process sees the mark, so the window can refuse the drag when it is dropped back on it.

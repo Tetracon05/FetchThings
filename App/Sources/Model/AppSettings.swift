@@ -56,6 +56,24 @@ final class AppSettings {
     /// Off by default: watching the clipboard is opt-in.
     var detectClipboard: Bool { didSet { defaults.set(detectClipboard, forKey: Key.clipboard) } }
     var defaultUserAgent: String { didSet { defaults.set(defaultUserAgent, forKey: Key.userAgent) } }
+    /// The system's preferred language, or one that overrides it. `AppleLanguages` is read once at launch (the same
+    /// mechanism as Xcode's own "App Language" scheme setting and the `-AppleLanguages` launch argument), so a change
+    /// only takes effect once the app relaunches.
+    var language: AppLanguage {
+        didSet {
+            guard language != oldValue else { return }
+            defaults.set(language == .system ? nil : language.rawValue, forKey: Key.language)
+            // `AppleLanguages` is what `Bundle` actually reads; removing it falls back to whatever is above it in the
+            // search list (ordinarily the system's own preference), which is why `language` is also kept under its own
+            // key: reading `AppleLanguages` back could otherwise find that same system value and mistake it for a
+            // choice this app made.
+            if language == .system {
+                defaults.removeObject(forKey: Key.appleLanguages)
+            } else {
+                defaults.set([language.rawValue], forKey: Key.appleLanguages)
+            }
+        }
+    }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -70,6 +88,9 @@ final class AppSettings {
         static let pauseConstrained = "pauseOnConstrainedNetwork"
         static let clipboard = "detectClipboard"
         static let userAgent = "defaultUserAgent"
+        static let language = "language"
+        /// Apple's own key, not a namespaced one: it must live where `Bundle`'s language resolution actually looks.
+        static let appleLanguages = "AppleLanguages"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -87,6 +108,7 @@ final class AppSettings {
         pauseOnConstrainedNetwork = defaults.object(forKey: Key.pauseConstrained) as? Bool ?? true
         detectClipboard = defaults.bool(forKey: Key.clipboard)
         defaultUserAgent = defaults.string(forKey: Key.userAgent) ?? ""
+        language = defaults.string(forKey: Key.language).flatMap(AppLanguage.init(rawValue:)) ?? .system
     }
 
     /// The limit of a mode in KB/s; 0 (unlimited) for High.
@@ -115,4 +137,23 @@ final class AppSettings {
 extension ClosedRange {
     /// `value`, held inside the range.
     func clamp(_ value: Bound) -> Bound { Swift.min(Swift.max(value, lowerBound), upperBound) }
+}
+
+/// A language FetchThings can be shown in, or `.system` for whichever of them the system prefers. The raw value is
+/// the language code `AppleLanguages` is set to, so it must match `CFBundleLocalizations` in `project.yml`.
+enum AppLanguage: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case system
+    case english = "en"
+    case turkish = "tr"
+
+    var id: String { rawValue }
+
+    /// Shown in its own language, like a system language picker, except for "System" itself.
+    var title: String {
+        switch self {
+        case .system: String(localized: "System", comment: "Language setting: follow the system's language")
+        case .english: "English"
+        case .turkish: "Türkçe"
+        }
+    }
 }

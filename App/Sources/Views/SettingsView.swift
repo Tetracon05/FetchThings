@@ -19,10 +19,26 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     let model: AppModel
     @State private var choosingFolder = false
+    @State private var showRelaunchPrompt = false
 
     var body: some View {
         @Bindable var settings = model.settings
         VStack(spacing: 18) {
+            TileSection(
+                title: Text("Language"),
+                footer: Text("FetchThings must relaunch to change its language.")
+            ) {
+                SettingTile(symbol: "globe", tint: .blue, title: Text("Language")) {
+                    Picker("Language", selection: $settings.language) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.title).tag(language)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 160)
+                }
+            }
             TileSection(title: Text("Downloads")) {
                 SettingTile(
                     symbol: "folder.fill", tint: .blue, title: Text("Download folder"),
@@ -60,6 +76,14 @@ private struct GeneralSettings: View {
             if case .success(let url) = result { settings.downloadFolder = url }
         }
         .onChange(of: settings.maxConcurrentDownloads) { Task { await model.applyEngineSettings() } }
+        .onChange(of: settings.language) { showRelaunchPrompt = true }
+        .confirmationDialog(
+            Text("Relaunch FetchThings to use \(settings.language.title)?"),
+            isPresented: $showRelaunchPrompt
+        ) {
+            Button("Relaunch Now") { model.relaunch() }
+            Button("Later", role: .cancel) {}
+        }
     }
 }
 

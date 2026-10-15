@@ -25,6 +25,7 @@
 		4C0B16ABE86B2B3ACC872D0C /* LinkSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83D89388C66084C7CEA7C6F /* LinkSummary.swift */; };
 		4E3895D5FBC3E845CE1F4896 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30BEF90EE0EE89F0A977144D /* SidebarView.swift */; };
 		4EF085AD711A01E37E593DCF /* ToolbarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96626D9612980EA3F2D0C4BE /* ToolbarSearchField.swift */; };
+		55A114723D7C74D0A87E470D /* FetchThings.icon in Resources */ = {isa = PBXBuildFile; fileRef = AE3BA02CDA28C754395CE964 /* FetchThings.icon */; };
 		57A721D090A768F907B18549 /* SpeedMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 408B9C182DD18AD82EB2AD9C /* SpeedMode.swift */; };
 		5A6C77CCA527014406917E34 /* KeychainSecretStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654ABB27B8ACD49F6796DF87 /* KeychainSecretStoreTests.swift */; };
 		5B297DBB5A427E772210E527 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E51498307E5C6523B6788F8 /* AppModelTests.swift */; };
@@ -109,6 +110,7 @@
 		ACFE49D41E1203633A328CF8 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		AD60ED26CA40FAED1C0F6A7D /* SnapshotDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotDisplay.swift; sourceTree = "<group>"; };
 		ADC083BD413C6C2DBAE8CB9D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AE3BA02CDA28C754395CE964 /* FetchThings.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = FetchThings.icon; sourceTree = "<group>"; };
 		B2A21591553245071D8BA5FA /* FilePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreview.swift; sourceTree = "<group>"; };
 		B77C14FAE7BF1E2F4CD7CC6A /* ServicesMenu.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = ServicesMenu.xcstrings; sourceTree = "<group>"; };
 		BA0CE9744895D604F6256C39 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
@@ -200,6 +202,7 @@
 		BDA46F7A67967DE8D992AAE0 = {
 			isa = PBXGroup;
 			children = (
+				AE3BA02CDA28C754395CE964 /* FetchThings.icon */,
 				84EB9F0BD2DBB6C072DC8E86 /* App */,
 				F45AFA1BA6618F1020BABE46 /* AppTests */,
 				EBC4E1CF52918F23447CC0CB /* Packages */,
@@ -354,6 +357,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9AFF2BB4B1D71DED3926AA6D /* Assets.xcassets in Resources */,
+				55A114723D7C74D0A87E470D /* FetchThings.icon in Resources */,
 				A20EE5E5FA3EC1CA22AE8F5C /* Localizable.xcstrings in Resources */,
 				24C9DC97AC0216C9AE92DE0D /* ServicesMenu.xcstrings in Resources */,
 			);
@@ -453,7 +457,7 @@
 		59CFBBF8A0A3424ACCBCDDF0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = FetchThings;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/FetchThings.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -471,7 +475,7 @@
 		6B14EA102AE1FA7F0F566172 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = FetchThings;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/FetchThings.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
