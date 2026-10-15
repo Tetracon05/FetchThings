@@ -1,11 +1,12 @@
 name: Release
 
-# Triggered by pushing a version tag, e.g.:
-#   git tag v1.2.3 && git push origin v1.2.3
+# Triggered by pushing a version tag. Tags track the Apple OS/Xcode release this build targets (its CLAUDE.md "Current
+# state" entry), not semantic versioning, e.g.:
+#   git tag v27.0 && git push origin v27.0
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*'
 
 permissions:
   contents: write
