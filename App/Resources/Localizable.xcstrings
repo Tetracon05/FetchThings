@@ -1,9 +1,8 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {},
-    "#" : {
-      "shouldTranslate" : false
+    "" : {
+
     },
     "%@ KB/s" : {
       "localizations" : {
@@ -208,22 +207,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Panoda %lld bağlantı var, ilki: %@"
-          }
-        }
-      }
-    },
-    "%lld, %@ priority" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld, %2$@ priority"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld, %@ öncelik"
           }
         }
       }
@@ -674,6 +657,16 @@
         }
       }
     },
+    "Couldn’t Open “%@”" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” Açılamadı"
+          }
+        }
+      }
+    },
     "Couldn’t Restore Downloads" : {
       "localizations" : {
         "tr" : {
@@ -904,6 +897,36 @@
         }
       }
     },
+    "FetchThings must relaunch to change its language." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dili değiştirmek için FetchThings’in yeniden başlatılması gerekir."
+          }
+        }
+      }
+    },
+    "File" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosya"
+          }
+        }
+      }
+    },
+    "File Missing" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosya Bulunamadı"
+          }
+        }
+      }
+    },
     "File name" : {
       "localizations" : {
         "tr" : {
@@ -1034,6 +1057,26 @@
         }
       }
     },
+    "Language" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dil"
+          }
+        }
+      }
+    },
+    "Later" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonra"
+          }
+        }
+      }
+    },
     "Limited to %@ kilobytes per second" : {
       "localizations" : {
         "tr" : {
@@ -1120,26 +1163,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Düşük hız: tüm indirmeler birlikte %@"
-          }
-        }
-      }
-    },
-    "Move to Bottom" : {
-      "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En Alta Taşı"
-          }
-        }
-      }
-    },
-    "Move to Top" : {
-      "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En Üste Taşı"
           }
         }
       }
@@ -1460,16 +1483,6 @@
         }
       }
     },
-    "Queue Position" : {
-      "localizations" : {
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sıra Konumu"
-          }
-        }
-      }
-    },
     "Queued" : {
       "localizations" : {
         "tr" : {
@@ -1496,6 +1509,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Yönlendiren (Referer)"
+          }
+        }
+      }
+    },
+    "Relaunch FetchThings to use %@?" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ dilini kullanmak için FetchThings yeniden başlatılsın mı?"
+          }
+        }
+      }
+    },
+    "Relaunch Now" : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Şimdi Yeniden Başlat"
           }
         }
       }
@@ -1830,6 +1863,17 @@
         }
       }
     },
+    "System" : {
+      "comment" : "Language setting: follow the system's language",
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sistem"
+          }
+        }
+      }
+    },
     "System default" : {
       "localizations" : {
         "tr" : {
@@ -1896,6 +1940,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Şu ana kadar indirilen veriler silinecek ve geri alınamaz."
+          }
+        }
+      }
+    },
+    "The file is no longer at this location." : {
+      "localizations" : {
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dosya artık bu konumda değil."
           }
         }
       }

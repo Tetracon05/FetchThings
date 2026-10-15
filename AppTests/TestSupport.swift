@@ -12,9 +12,8 @@ actor FakeEngine: DownloadEngine {
     /// What the model told the engine about the network (kept apart from `calls`, whose exact order tests check).
     private(set) var networkPolicies: [NetworkPolicy] = []
     private(set) var networkOverrides = 0
-    /// What the model asked of the queue, in words (`moveToTop [ids]`), kept apart from `calls` like the network ones.
+    /// What the model asked about priority, in words (`priority 1 2`), kept apart from `calls` like the network ones.
     private(set) var queueCalls: [String] = []
-    private(set) var moves: [(ids: [DownloadID], target: DownloadID?)] = []
     private var networkContinuation: AsyncStream<NetworkState>.Continuation?
     /// Whether `load` came after the policy was set: the launch must know the policy before it starts anything.
     private(set) var policySetBeforeLoad = false
@@ -47,12 +46,6 @@ actor FakeEngine: DownloadEngine {
     func setGlobalSpeedLimit(_ bytesPerSecond: Int64?) async { calls.append("globalLimit \(bytesPerSecond.map(String.init) ?? "nil")") }
 
     func setPriority(_ priority: DownloadPriority, for ids: [DownloadID]) async { queueCalls.append("priority \(priority.rawValue) \(ids.count)") }
-    func move(_ ids: [DownloadID], before target: DownloadID?) async {
-        queueCalls.append("move \(ids.count)")
-        moves.append((ids, target))
-    }
-    func moveToTop(_ ids: [DownloadID]) async { queueCalls.append("top \(ids.count)"); moves.append((ids, nil)) }
-    func moveToBottom(_ ids: [DownloadID]) async { queueCalls.append("bottom \(ids.count)") }
     func setNetworkPolicy(_ policy: NetworkPolicy) async { networkPolicies.append(policy) }
     func overrideNetworkBlock() async { networkOverrides += 1 }
 
@@ -102,7 +95,6 @@ func snapshot(
     finalURL: URL? = nil,
     sequence: Int = 0,
     priority: DownloadPriority = .normal,
-    rank: Double? = nil,
     completedAt: TimeInterval? = nil
 ) -> DownloadSnapshot {
     DownloadSnapshot(
@@ -118,8 +110,7 @@ func snapshot(
         completedAt: completedAt.map { Date(timeIntervalSince1970: $0) },
         finalURL: finalURL,
         sequence: sequence,
-        priority: priority,
-        queueRank: rank
+        priority: priority
     )
 }
 

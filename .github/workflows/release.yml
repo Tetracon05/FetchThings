@@ -1,0 +1,109 @@
+name: Release
+
+# Triggered by pushing a version tag. Tags track the Apple OS/Xcode release this build targets (its CLAUDE.md "Current
+# state" entry), not semantic versioning, e.g.:
+#   git tag v27.0 && git push origin v27.0
+on:
+  push:
+    tags:
+      - 'v*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Pinned to the Xcode 27 preview image so CI matches the toolchain this project is
+    # built with (Swift 6.4, see CLAUDE.md). Once Xcode 27 is the GA default, switch this
+    # to `macos-latest` (or pin an explicit macOS/Xcode combo via setup-xcode).
+    runs-on: xcode-27
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test engine (DownloadKit)
+        working-directory: DownloadKit
+        run: swift test
+
+      - name: Test app
+        run: |
+          xcodebuild test \
+            -project FetchThings.xcodeproj \
+            -scheme FetchThings \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project FetchThings.xcodeproj \
+            -scheme FetchThings \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/FetchThings.xcarchive \
+            -derivedDataPath build/DerivedData \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+          # No Developer ID is configured yet (see CLAUDE.md), so this produces the same
+          # ad-hoc signed build (CODE_SIGN_IDENTITY "-") that local builds already use.
+          # -exportArchive would require an export-options plist tied to a signing identity,
+          # so the already-built app is taken straight out of the archive's Products folder.
+
+      - name: Build .dmg
+        id: dmg
+        run: |
+          set -euo pipefail
+          app="build/FetchThings.xcarchive/Products/Applications/FetchThings.app"
+          staging="build/dmg-root"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          cp -R "$app" "$staging/"
+          ln -s /Applications "$staging/Applications"
+
+          name="FetchThings-${{ steps.version.outputs.version }}"
+          dmg="build/$name.dmg"
+          hdiutil create -volname "FetchThings" -srcfolder "$staging" -ov -format UDZO "$dmg"
+          shasum -a 256 "$dmg" > "$dmg.sha256"
+
+          echo "dmg_path=$dmg" >> "$GITHUB_OUTPUT"
+          echo "checksum_path=$dmg.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease_flag=""
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then
+            prerelease_flag="--prerelease"
+          fi
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.dmg.outputs.dmg_path }}" \
+            "${{ steps.dmg.outputs.checksum_path }}" \
+            --title "FetchThings ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            $prerelease_flag
